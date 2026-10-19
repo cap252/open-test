@@ -14,13 +14,14 @@ def preprocessing_implementation(settings):
     import cv2
     import numpy
     import PIL
-    from ..models import preprocess, bundle
+    from ..models import preprocess, bundle, extended_preprocess
 
     return dict(
         files={
             "preprocess": sha256(preprocess.__file__),
             "bundle": sha256(bundle.__file__),
             "dataset": sha256(__file__),
+            "extended_preprocess": sha256(extended_preprocess.__file__),
         },
         dependencies={
             "numpy": numpy.__version__,
@@ -31,6 +32,8 @@ def preprocessing_implementation(settings):
 
 
 class Dataset:
+    """A prepared dataset manifest: yields evaluation samples and calibration feeds."""
+
     def __init__(self, manifest, *, root=None):
         self.manifest = Path(manifest)
         self.info = read_json(self.manifest)
@@ -40,6 +43,10 @@ class Dataset:
             k: self.path(v) for k, v in self.info.get("annotations", {}).items()
         }
         self.annotation_identity = {k: sha256(v) for k, v in self.annotations.items()}
+        if self.dataset == "lfw_mobilefacenet":
+            from .lfw import validate_manifest
+
+            validate_manifest(self.info, self.root)
 
     def path(self, relative):
         p = (self.root / relative).resolve()
@@ -47,12 +54,20 @@ class Dataset:
             raise ValueError("Dataset path escapes root")
         return p
 
-    def rows(self, split):
+    def rows(self, split, limit=None):
         rows = self.info[split]
         ids = [str(x["id"]) for x in rows]
         if len(ids) != len(set(ids)):
             raise ValueError("Duplicate dataset IDs")
-        return rows
+        if limit is None:
+            return rows
+        if split == "validation" and "evaluation_pairs" in self.info:
+            # LFW is scored per pair: a limit counts pairs and keeps both views of
+            # every image in them, so a limited run still scores whole pairs.
+            pairs = self.info["evaluation_pairs"][:limit]
+            keys = {p[k] for p in pairs for k in ("first", "second")}
+            return [r for r in rows if r["image_key"] in keys]
+        return rows[:limit]
 
     def identity(self, split, limit=None):
         # Root location is excluded. Detect content/annotation changes before reuse.
@@ -60,6 +75,11 @@ class Dataset:
             [
                 self.dataset,
                 self.annotation_identity,
+                {
+                    k: self.info[k]
+                    for k in ("evaluation_pairs", "smoke")
+                    if k in self.info
+                },
                 [
                     (
                         r,
@@ -68,7 +88,7 @@ class Dataset:
                         if isinstance(r.get("target"), str)
                         else None,
                     )
-                    for r in self.rows(split)[:limit]
+                    for r in self.rows(split, limit)
                 ],
             ]
         )
@@ -79,13 +99,15 @@ class Dataset:
         import numpy as np
 
         recipe = bundle.spec.recipe
-        for row in self.rows(split)[:limit]:
+        for row in self.rows(split, limit):
             with Image.open(self.path(row["path"])) as image:
+                if recipe["task"] == "face_verification" and row.get("flip") == 1:
+                    image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
                 tensor, meta = preprocess(
                     image, recipe["preprocess"], recipe["input"]["layout"]
                 )
             feeds, meta = bundle.prepare(tensor, meta)
-            target = row.get("target")
+            target = meta.pop("target", row.get("target"))
             if recipe["task"] == "segmentation" and target is not None:
                 with Image.open(self.path(target)) as image:
                     target = np.asarray(image).copy()
@@ -107,6 +129,11 @@ class Dataset:
         from ..ort.config import OrtConfig
         from ..ort.session import environment
         from .feed_cache import prepare_feed_cache
+
+        if any(not isinstance(d, int) for d in bundle.spec.recipe["input"]["shape"]):
+            from .variable_cache import (
+                prepare_variable_feed_cache as prepare_feed_cache,
+            )
 
         implementation = preprocessing_implementation(bundle.spec.recipe["preprocess"])
         if implementation is None:

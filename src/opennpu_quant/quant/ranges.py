@@ -1,3 +1,7 @@
+"""Select activation ranges (MinMax, Percentile, Entropy) from collected statistics."""
+
+import contextlib
+import sys
 from .config import CalibrationConfig
 from ..ort.numerics import histogram_collector
 
@@ -14,9 +18,7 @@ def select_ranges(
         histograms,
         config.method,
         symmetric=activation_symmetric,
-        percentile=config.percentile_value
-        if config.percentile_value is not None
-        else 99.999,
+        percentile=config.percentile_value,
         quantized_bins=config.quantized_bins,
     )
 
@@ -55,7 +57,11 @@ def _histogram_ranges(histograms, method, *, symmetric, percentile, quantized_bi
                 row["high"],
                 row["bound"],
             )
+    # ORT prints progress; keep stdout for the CLI's JSON result.
+    with contextlib.redirect_stdout(sys.stderr):
+        thresholds = collector.compute_collection_result()
+    # ORT appends histogram data after (low, high); only the first two are ranges.
     return {
         name: dict(lowest=float(limits[0]), highest=float(limits[1]))
-        for name, limits in collector.compute_collection_result().items()
+        for name, limits in thresholds.items()
     }

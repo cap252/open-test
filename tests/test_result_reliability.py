@@ -60,6 +60,7 @@ def fixture(root, *, external=False, host=None):
     onnx.save_model(model, directory / "network.onnx", **options)
     recipe = copy.deepcopy(ModelSpec.load("resnet18").recipe)
     recipe["name"] = "toy"
+    recipe["decode"]["profile"] = "current_v1"
     recipe["preprocess"].update(resize=4, crop=4)
     recipe["input"]["shape"] = [1, 3, 4, 4]
     if host:
@@ -112,6 +113,7 @@ def fixture(root, *, external=False, host=None):
         ),
     )
     config = load_config()
+    config["runtime"]["device"] = "cpu"
     config["name"] = "reliability"
     config["models"] = ["toy"]
     config["percentiles"]["toy"] = dict(pot=99.9, float=99.9)
@@ -262,6 +264,46 @@ class ResultReliabilityTests(unittest.TestCase):
                 ),
             )
             with self.assertRaisesRegex(ValueError, "changed"):
+                run(config, paths)
+
+    def test_recomputed_result_does_not_attest_an_earlier_attempts_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            paths, config = fixture(Path(temp))
+            config["output"]["save_predictions"] = True
+            run(config, paths)
+            condition = paths.runs / config["name"] / "toy/pot_rtn"
+            self.assertTrue((condition / "predictions.jsonl.gz").is_file())
+            config["output"]["save_predictions"] = False
+            result = run(config, paths, force=True)
+            self.assertFalse((condition / "predictions.jsonl.gz").exists())
+            files = read_json(condition / "complete.json")["files"]
+            self.assertNotIn("predictions.jsonl.gz", files)
+            self.assertTrue(all(r["state"] == "completed" for r in result["rows"]))
+
+    def test_report_failure_while_handling_an_error_keeps_the_original_error(self):
+        with tempfile.TemporaryDirectory() as temp:
+            paths, config = fixture(Path(temp))
+            with (
+                patch(
+                    "opennpu_quant.runner.quantize",
+                    side_effect=RuntimeError("injected failure"),
+                ),
+                patch(
+                    "opennpu_quant.runner.report",
+                    side_effect=ValueError("report failure"),
+                ),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "injected failure"):
+                    run(config, paths)
+
+    def test_undefined_primary_metric_lists_the_available_metrics(self):
+        with tempfile.TemporaryDirectory() as temp:
+            paths, config = fixture(Path(temp))
+            recipe_path = paths.models / "toy/recipe.yaml"
+            recipe = yaml.safe_load(recipe_path.read_text())
+            recipe["metric"] = "top3"
+            recipe_path.write_text(yaml.safe_dump(recipe))
+            with self.assertRaisesRegex(ValueError, "'top3'.*available: top1, top5"):
                 run(config, paths)
 
 

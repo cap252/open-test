@@ -21,7 +21,7 @@ def record(condition="fp32", value=0.8, **changes):
         model_name="테스트 모델",
         condition=condition,
         state="evaluated",
-        origin="historical_research",
+        origin="standalone_run",
         primary_metric="top1",
         dataset="imagenet",
         split="validation",
@@ -60,6 +60,72 @@ def record(condition="fp32", value=0.8, **changes):
 
 
 class ResultTests(unittest.TestCase):
+    def test_historical_origin_is_rejected_regardless_of_pairing_evidence(self):
+        for case in ("matching", "runtime", "source_code_identity", "missing"):
+            with self.subTest(case=case):
+                base = record(origin="historical_research")
+                quantized = record("q", 0.78, origin="historical_research")
+                if case == "missing":
+                    quantized["evidence"].clear()
+                elif case == "runtime":
+                    quantized["evidence"][case] = {"optimization": "ORT_ENABLE_ALL"}
+                elif case == "source_code_identity":
+                    quantized["evidence"][case] = "different-code"
+                with self.assertRaisesRegex(ValueError, "historical_research"):
+                    tables([base, quantized])
+
+    def test_mixed_historical_records_are_rejected_before_export(self):
+        records = [record(), record("q", 0.78, origin="historical_research")]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "records.json"
+            atomic_json(source, dict(schema_version=1, records=records))
+            before = source.read_bytes()
+            for action in (
+                lambda: tables(records),
+                lambda: read_records(source),
+                lambda: export_records(records, root / "direct"),
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "historical_research.*run 'r'.*model 'm'.*condition 'q'",
+                ):
+                    action()
+            self.assertFalse((root / "direct").exists())
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "opennpu_quant",
+                    "results",
+                    str(source),
+                    "--output",
+                    str(root / "cli"),
+                    "--stdout",
+                    "csv",
+                ],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(2, result.returncode, result.stderr)
+            self.assertEqual("", result.stdout)
+            for text in (
+                "historical_research",
+                "run 'r'",
+                "model 'm'",
+                "condition 'q'",
+            ):
+                self.assertIn(text, result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertFalse((root / "cli").exists())
+            self.assertEqual(before, source.read_bytes())
+
+    def test_other_origins_keep_existing_pairing_behavior(self):
+        rows, _ = tables([record(origin="custom"), record("q", 0.78, origin="custom")])
+        self.assertEqual("passed", rows[1]["pairing_status"])
+        self.assertEqual(97.5, rows[1]["recovery_pct"])
+
     def test_units_pairing_missing_and_zero(self):
         base, q = record(), record("pot_rtn", 0.78)
         rows, detail = tables([base, q])
@@ -95,22 +161,15 @@ class ResultTests(unittest.TestCase):
         q["metrics"]["top1"]["unit"] = "unknown"
         self.assertIsNone(tables([base, q])[0][1]["recovery_pct"])
 
-    def test_historical_protocol_mismatch_and_missing_evidence_are_unmatched(self):
-        for field in (
-            "model_identity",
-            "preprocessing_identity",
-            "source_code_identity",
-            "runtime",
-        ):
+    def test_identity_mismatch_and_missing_evidence_are_unmatched(self):
+        for field in ("model_identity", "preprocessing_identity"):
             for missing in (True, False):
                 with self.subTest(field=field, missing=missing):
                     base, q = record(), record("q", 0.78)
                     if missing:
                         q["evidence"].pop(field)
                     else:
-                        q["evidence"][field] = (
-                            {"optimization": "other"} if field == "runtime" else "other"
-                        )
+                        q["evidence"][field] = "other"
                     row = tables([base, q])[0][1]
                     self.assertIsNone(row["recovery_pct"])
                     self.assertEqual(
@@ -160,8 +219,6 @@ class ResultTests(unittest.TestCase):
                     str(p / "records.json"),
                     "--stdout",
                     "tsv",
-                    "--view",
-                    "full",
                 ],
                 capture_output=True,
                 text=True,

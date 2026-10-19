@@ -11,7 +11,13 @@ def now():
 
 
 def read_json(path):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"Invalid JSON in {path} (line {error.lineno}, column {error.colno}): "
+            f"{error.msg}"
+        ) from None
 
 
 def read_yaml(path):

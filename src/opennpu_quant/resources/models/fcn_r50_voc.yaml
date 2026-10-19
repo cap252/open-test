@@ -1,0 +1,37 @@
+name: fcn_r50_voc
+title: FCN-ResNet50
+task: segmentation
+dataset: voc
+metric: mIoU
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - height
+  - width
+  layout: NCHW
+graphs:
+  network: network.onnx
+preprocess:
+  kind: mmseg_resize
+  size: 512
+decode:
+  kind: segmentation_resize
+  output: logits
+source:
+  url: https://download.openmmlab.com/mmsegmentation/v0.5/fcn/fcn_r50-d8_512x512_20k_voc12aug/fcn_r50-d8_512x512_20k_voc12aug_20200617_010715-52dc5306.pth
+  sha256: 52dc5306bca5638d2a18cd68b29bfe2b6af428c3d295fb32dea1a9b4d9befc55
+  repo: https://github.com/open-mmlab/mmsegmentation
+  commit: b040e147adfa027bbc071b624bedf0ae84dfc922
+  variant: fcn_r50-d8_4xb4-20k_voc12aug-512x512
+  file: checkpoint.pt
+  archive_sha256: 4c0e6abff31839c655feeb6cd28d5f3b0eac9cc66bfb70167897c916dba2b990
+export:
+  family: mmseg
+  opset: 17
+  simplify: false
+  dynamic_spatial: true
+  fixture_size: 512
+  outputs:
+  - logits

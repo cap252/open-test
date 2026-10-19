@@ -1,3 +1,5 @@
+"""calibrate(): replay the feeds through the FP32 model and collect activation statistics."""
+
 from dataclasses import dataclass
 from pathlib import Path
 import hashlib
@@ -75,6 +77,11 @@ def statistics_identity(ranges, histograms):
 def collect_statistics(
     source, feeds, *, bins, session_factory, scratch=None, execution=None
 ):
+    """Two passes over the feeds through a model that outputs every planned tensor.
+
+    Pass 1 records min/max per tensor; pass 2 fills histograms with fixed edges at
+    +/-(absmax * 1.00001 + 1e-6). Both passes must see identical ordered inputs.
+    """
     from .engine import infer_model, layout, _add_calibration_outputs
 
     if not callable(feeds):

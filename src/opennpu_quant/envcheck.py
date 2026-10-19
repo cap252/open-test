@@ -12,6 +12,11 @@ REFERENCE = {
     "pycocotools": "2.0.8",
     "tensorflow-cpu": "2.15.1",
     "tf2onnx": "1.16.1",
+    "timm": "1.0.15",
+    "ultralytics": "8.3.0",
+    "mmcv": "2.1.0",
+    "mmengine": "0.10.7",
+    "mmsegmentation": "1.2.2",
 }
 
 

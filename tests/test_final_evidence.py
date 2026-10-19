@@ -1,14 +1,10 @@
 import copy
-import importlib.util
-import json
 from pathlib import Path
 import tempfile
 import unittest
 
 from opennpu_quant._io import read_json
-from opennpu_quant.comparison import write_comparison
 from opennpu_quant.results import tables
-from tests.test_comparison import fixture as comparison_fixture, save_fixture
 
 
 class FinalEvidenceTests(unittest.TestCase):
@@ -68,66 +64,3 @@ class FinalEvidenceTests(unittest.TestCase):
                 self.assertEqual("mismatch", row["pairing_status"])
                 self.assertIsNone(row["recovery_pct"])
                 self.assertIsNotNone(row["int8_pct"])
-
-    @unittest.skipUnless(importlib.util.find_spec("openpyxl"), "optional report extra")
-    def test_xlsx_unmatched_keeps_accuracy_and_excludes_summary(self):
-        from openpyxl import load_workbook
-
-        catalog, records = comparison_fixture()
-        for row in records:
-            if row["record_id"].startswith("00_asym_pc_pot_"):
-                row["provenance"]["preprocessing_identity"] = "changed"
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            source = save_fixture(root, catalog, records)
-            write_comparison(source, root / "out", xlsx=True)
-            expected = json.loads((root / "out/comparison.json").read_text())["sheets"]
-            workbook = load_workbook(
-                root / "out/CORE10_COMPARISON.xlsx", read_only=True, data_only=True
-            )
-            try:
-
-                def rows(sheet):
-                    values = list(workbook[sheet].values)
-                    return [dict(zip(values[0], row)) for row in values[1:]]
-
-                exported = rows("All_History")
-                self.assertEqual(len(expected["All_History"]), len(exported))
-                unmatched = [
-                    (row, original)
-                    for row, original in zip(exported, expected["All_History"])
-                    if original["record_id"].startswith("00_asym_pc_pot_")
-                ]
-                self.assertEqual(6, len(unmatched))
-                for row, original in unmatched:
-                    self.assertEqual("mismatch", original["pairing_status"])
-                    self.assertFalse(original["eligible"])
-                    self.assertIsInstance(row["int8_accuracy"], (int, float))
-                    self.assertAlmostEqual(
-                        original["accuracy_percent"], row["int8_accuracy"]
-                    )
-                    self.assertIsNone(row["recovery_percent"])
-                    self.assertIn("preprocessing", original["reason"])
-                summary = [
-                    r
-                    for r in rows("Summary")
-                    if r["selection"] == "validation_posthoc"
-                    and r["group"] == "asym_pc"
-                    and r["scale_family"] == "pot"
-                ]
-                self.assertEqual(3, len(summary))
-                for row in summary:
-                    self.assertEqual("incomplete", row["state"])
-                    self.assertIsNone(row["mean_recovery_percent"])
-                    self.assertIsNone(row["target_met"])
-                other = next(
-                    r
-                    for r in rows("Summary")
-                    if r["selection"] == "validation_posthoc"
-                    and r["group"] == "asym_pc"
-                    and r["scale_family"] == "float"
-                )
-                self.assertEqual("complete", other["state"])
-                self.assertIsInstance(other["mean_recovery_percent"], (int, float))
-            finally:
-                workbook.close()

@@ -22,7 +22,7 @@ def calibrate(model, feeds, *, config=None, ort=None):
 
     Examples
     --------
-    With a prepared model and a replayable feeds function (see the README):
+    With a prepared model and a replayable feeds function (see docs/api.md):
 
     >>> from opennpu_quant import calibrate, OrtConfig
     >>> stats = calibrate(model, feeds, ort=OrtConfig.cpu())
@@ -78,7 +78,7 @@ def quantize(
 
     Examples
     --------
-    With model and feeds prepared as in the README:
+    With model and feeds prepared as in docs/api.md:
 
     >>> from opennpu_quant import quantize, QuantizationConfig
     >>> result = quantize(model, feeds, config=QuantizationConfig())

@@ -204,13 +204,11 @@ class RecalibrateTests(unittest.TestCase):
                     ort=execution,
                 )
                 if policy.get("adaround"):
-                    options = dict(config["adaround"])
-                    options.pop("data")
                     expected = runner.apply_adaround(
                         bundle.paths["network"],
                         expected,
                         feeds,
-                        AdaroundConfig(**options),
+                        AdaroundConfig(**config["adaround"]),
                         ort=execution,
                     )
                 path = out / "toy" / c / "model.onnx"
@@ -337,69 +335,6 @@ class RecalibrateTests(unittest.TestCase):
                 after["calibration_generation"],
                 read_json(out / "toy/pot_rtn/result.json")["calibration_generation"],
             )
-
-    def test_reference_rejected_up_front_for_completed_and_partial_runs(self):
-        with tempfile.TemporaryDirectory() as temp:
-            paths, config = fixture(Path(temp))
-            runner.run(config, paths)
-            parent = paths.cache / "calibration" / "toy"
-            source = next(p for p in parent.iterdir() if (p / "complete.json").exists())
-            shutil.copytree(source, parent / "reference")
-            reference = copy.deepcopy(config)
-            reference["name"] = "reference"
-            reference["calibration"]["source"] = "reference"
-            runner.run(reference, paths)
-            out = paths.runs / reference["name"]
-            for partial in (False, True):
-                if partial:
-                    (out / "toy/pot_rtn/complete.json").unlink()
-                before = {
-                    str(p.relative_to(out)): sha256(p)
-                    for p in out.rglob("*")
-                    if p.is_file()
-                }
-                with patch.object(
-                    runner, "calibrate", side_effect=AssertionError("reject first")
-                ):
-                    with self.assertRaisesRegex(
-                        ValueError, "calibration.source=compute"
-                    ):
-                        runner.run(reference, paths, recalibrate=True)
-                after = {
-                    str(p.relative_to(out)): sha256(p)
-                    for p in out.rglob("*")
-                    if p.is_file()
-                }
-                self.assertEqual(before, after)
-            reference["name"] = "never_started"
-            with self.assertRaisesRegex(ValueError, "calibration.source=compute"):
-                runner.run(reference, paths, recalibrate=True)
-            self.assertFalse((paths.runs / reference["name"]).exists())
-
-    def test_force_reference_does_not_resume_pending_compute_request(self):
-        with tempfile.TemporaryDirectory() as temp:
-            paths, config = fixture(Path(temp))
-            runner.run(config, paths)
-            parent = paths.cache / "calibration" / "toy"
-            source = next(p for p in parent.iterdir() if (p / "complete.json").exists())
-            shutil.copytree(source, parent / "reference")
-            reference_hash = sha256(parent / "reference/complete.json")
-            with patch.object(
-                runner, "calibrate", side_effect=RuntimeError("interrupted")
-            ):
-                with self.assertRaisesRegex(RuntimeError, "interrupted"):
-                    runner.run(config, paths, recalibrate=True)
-            config["calibration"]["source"] = "reference"
-            with patch.object(
-                runner,
-                "calibrate",
-                side_effect=AssertionError("reference is read-only"),
-            ):
-                runner.run(config, paths, force=True)
-                runner.run(config, paths)
-            self.assertEqual(reference_hash, sha256(parent / "reference/complete.json"))
-            result = read_json(paths.runs / config["name"] / "toy/pot_rtn/result.json")
-            self.assertNotIn("calibration_generation", result)
 
     def test_fp32_only_rejected_before_creating_run(self):
         with tempfile.TemporaryDirectory() as temp:

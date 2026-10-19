@@ -1,0 +1,214 @@
+name: posenet_101
+title: PoseNet
+task: keypoints
+dataset: coco_keypoints
+metric: AP
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - 513
+  - 513
+  layout: NCHW
+graphs:
+  network: network.onnx
+preprocess:
+  kind: posenet
+  size: 513
+  mean:
+  - 127.5
+  - 127.5
+  - 127.5
+  std:
+  - 127.5
+  - 127.5
+  - 127.5
+decode:
+  kind: posenet
+  output: predictions
+source:
+  url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/
+  sha256: b416653bd0929cac9eac442bac9e3fbbdc1e19675c072916313aa6fa60a686b5
+  variant: 'Candidate: TF.js PoseNet port, model ID 101; pin output stride and input
+    profile'
+  code_revision: 6f7376d47683553b99d6b67734bc8b368dbcda73
+  repo: https://github.com/rwightman/posenet-pytorch
+  commit: 6f7376d47683553b99d6b67734bc8b368dbcda73
+  parts:
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/manifest.json
+    sha256: 9f8d8795267a97486e16e0f2db8404a12a808c7542045b12f2238884b8a411be
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_0_biases
+    sha256: 046e8422d074a6a408db96a2d07ffd265bb93db8e2f1f8c3974ab91ded1cff8c
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_0_weights
+    sha256: f6ea830726a1061ca1e7ce1ed643114065ee4b48ea1bdc4178aa7c0277b65810
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_10_depthwise_biases
+    sha256: 12610c26d9e0d9c785872149f0dfd884ac54bae31924f7e9a912c1d173fb097f
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_10_depthwise_depthwise_weights
+    sha256: 8cc91c03ae87272b47a88b75d8cd7a294cd82d185d0583f3d65ee730a878e89a
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_10_pointwise_biases
+    sha256: 45e8a4e3967fdd9ec636c9103966cc695f40723a61e6a1a22373ab3865cf7b57
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_10_pointwise_weights
+    sha256: e4336a7f71fe701431d27f5c20cd7127e81a508f6b215655922ca2f879e8d9b7
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_11_depthwise_biases
+    sha256: d0a1ba33916e94b6759bd85f0dc37e83afa71f3ad473c70a4dc755a8c5de6db7
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_11_depthwise_depthwise_weights
+    sha256: ac64b0046c36def29a083abce221d81c251a81a5f5d60ab559a6ffeae48cefd5
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_11_pointwise_biases
+    sha256: 537357d2331145980960183f949c1369ef9fc885c4c97b664751e9882a88bcdc
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_11_pointwise_weights
+    sha256: a410710e40d8db9ddef8df35e8704c3a36ffba5d1b84761df1002c85274d4b59
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_12_depthwise_biases
+    sha256: 710699ca5d4ea0e4ba75eb1f089391cb77289b971ba3c61e77c120d59ff21270
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_12_depthwise_depthwise_weights
+    sha256: fde1af6b33a1e6428ace941dbeef9f019833c63746da58d61e6c46ffd8f03db8
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_12_pointwise_biases
+    sha256: 73e802bfa47174aa98dc94e8bbc52ec366cfb4b9dc11f02d2c9da90908f55bda
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_12_pointwise_weights
+    sha256: 489942a21369fd85bfe0fd0c702dc68b339bdce129068d614f83ed3597bf1768
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_13_depthwise_biases
+    sha256: e643111839ab942f60384fdc1932f18d43aa9edfe5e3f431f8ad61c7df91ddf4
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_13_depthwise_depthwise_weights
+    sha256: d8874d8ffac9eb7d2217f4b177f053d15a1ff2d5095eef414b60c5da741b89f3
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_13_pointwise_biases
+    sha256: eac2110cd3e76bd59213ebbaec14bf3ac380911ea80bff5d893a61cf15d6ccb4
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_13_pointwise_weights
+    sha256: c98831ad924ddce25f6aa7a260b1539bc90d0bdad0caa35854300e977bbe5552
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_1_depthwise_biases
+    sha256: 1cbbf609cde06c662f3fb7db301e510d9cb325bbfe238e587b498c401833830b
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_1_depthwise_depthwise_weights
+    sha256: e101de50a18aa07d1b3bc2f3c5f46eaade27aa5ef2017234ee42791363a25eaa
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_1_pointwise_biases
+    sha256: 6a2b40e92f131c965091f3d7c66a84bac3e662507c6d75b8613854b5152cbc69
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_1_pointwise_weights
+    sha256: ab92231dc9e4b64039067514cd9c1a93aa6ad3d3723c53e647d8a474228db670
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_2_depthwise_biases
+    sha256: 3580f83fe66edbdc4ae85e9cff595aa024d342e891c79b0234762664ad6e92b3
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_2_depthwise_depthwise_weights
+    sha256: ff9012cefa6a07b7637d3d8ba4b9c224a97ebea4404d1b9c86fba803f826fb52
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_2_pointwise_biases
+    sha256: 5197e88223214e39a8d120b98fb186f0b48f54f505538b6c68fb7215b4dee0a6
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_2_pointwise_weights
+    sha256: 4b3da7eb2c29313822a7f3d3fd8374452152c681210f398d5f5a5af2fbe9d5e4
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_3_depthwise_biases
+    sha256: 163917bca35c4cd89bcf36d3a1f0143c610e996fe0f9106afe5b397e2816e14e
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_3_depthwise_depthwise_weights
+    sha256: 9a1e8834e24c2cea6aeb3fb1a25fc15b4f6afd38c81e17bf534b671ae964f93a
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_3_pointwise_biases
+    sha256: cc6b52456a62fb4f9bdd9c874f9f27a05e65edaf305ee6c19b8917e74776a56f
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_3_pointwise_weights
+    sha256: 9bbd0e5c5f971f59299e9ea00d70f96cbaa4c8463ac1c02ba85dba90407f0f35
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_4_depthwise_biases
+    sha256: 62107ee79a63e01a3a591a11e783180c6ebeb8df481bc63a7a9744ce65633cbd
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_4_depthwise_depthwise_weights
+    sha256: e03e7d7d0e0ffe1b83d2da837f25f63c9d457126c76c82063d768ee9dd5e8747
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_4_pointwise_biases
+    sha256: 71332b32a9deb898deae3089753093150c8a09e33dd54e27fa64f0e2a2f7dc32
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_4_pointwise_weights
+    sha256: e523283112484ed7fbb967ac5c61d94550d501a8201987b4966111c07331b27e
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_5_depthwise_biases
+    sha256: 036a2bee25aa23d260a24720577374a14f545f99c99ccbe38c333b5a4b5555b1
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_5_depthwise_depthwise_weights
+    sha256: bd6076653eb181c32eb6b29033cfed72714cb21e290cd28dd50076555bebf580
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_5_pointwise_biases
+    sha256: e14a7edca3c7f11e3c47ce8e121743a2c0a6120a9644fb5f8a3e938b77f3bd29
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_5_pointwise_weights
+    sha256: ee351d31dccf5ad2f29e5cd05f884d33d04fecf8d9a9027916c48aa107ad39b3
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_6_depthwise_biases
+    sha256: 5530db5a44aef3f0694b8f1a134297627c67116bab26a8a1139b3b3dfd8d25a4
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_6_depthwise_depthwise_weights
+    sha256: e2461e0db0d8fc01a090c2333b236a47fbbf7002938864ef1e8832884966fa2f
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_6_pointwise_biases
+    sha256: a1dd2af92ccabbdca0514b4c5e120f751f5935bcc5aeb044758a962071009cfc
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_6_pointwise_weights
+    sha256: 67243d7089a5ebda008c1c0fc7e331e01afcd06bf047c0c430c9b8d13f7fcbaa
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_7_depthwise_biases
+    sha256: cb196d12a3a9b8b9449d557cc326cc053be58262801014a957aff6328af18e62
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_7_depthwise_depthwise_weights
+    sha256: 63a25d4348123a42966948099d62267906bf7a61b43e1fc7b796bb8777c47d50
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_7_pointwise_biases
+    sha256: fa661a031b75e18f316e49343601c34300d0100398d0ebd866b3a5d283735764
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_7_pointwise_weights
+    sha256: d0b96706e469354173c48d0bcae1f16b674ff5588171d35a6ceba681192ca665
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_8_depthwise_biases
+    sha256: dbcee3b83477d6741743cee3840fefbed8e04ec57d2261895d3753eab6c046d0
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_8_depthwise_depthwise_weights
+    sha256: 59a178f98742ab12f16bfc22729242a834a2453e79c2480086d87a87c4c55348
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_8_pointwise_biases
+    sha256: 35903bb95fe324f4b847e4ec7930eb677b7cd2d38a3ae0a8cf24b3cc810d94bc
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_8_pointwise_weights
+    sha256: a2aac38ae1090d96c52c360281dd714d3da11ddc902d393b3f638e6d2460beb1
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_9_depthwise_biases
+    sha256: e26be952a4603f84ac1f6724cc07606ad9c99a96922e148c73e7a9e1d95b28b9
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_9_depthwise_depthwise_weights
+    sha256: ee10c52322cfb4bca0c55432df8274e9e9f7f2cb356f73a5822ee758295a0d65
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_9_pointwise_biases
+    sha256: caaf53e703caaccb8ab99eeaea77572b63180f10df0a3c844c2fc3fbb8bcf89d
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_Conv2d_9_pointwise_weights
+    sha256: 489b33f2a90645df802d491694a81fadc1fa769518edd15c1c4878f1dd42ce6b
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_displacement_bwd_1_biases
+    sha256: 4546608ff5f4430a472ab57ee0ae541aec7501da2629ced8be5f51318fb13001
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_displacement_bwd_1_weights
+    sha256: 87d6d733f64a43aa20de30c61a1a45a668e6fd30111aed6d3741b0c7e8177f1c
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_displacement_bwd_2_biases
+    sha256: 94ddfad815cb3c9832d0b95ef790fbc49915a5d27ba369d09dad240579c0fc8a
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_displacement_bwd_2_weights
+    sha256: 2c7f4b508fc122a4759ee5b8a1a626c54a303b94991e8bbc43dcbd1e9043ec8c
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_displacement_fwd_1_biases
+    sha256: 3d4a276c597ee1f9d3bd1c80b21ceaef8fe1cd561c607d958cdd39a7f1fe0a5e
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_displacement_fwd_1_weights
+    sha256: 711a0a032b8ee818d09046b8bafd6f63df184caa59e7499fd96d06a8e0f3ccf6
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_displacement_fwd_2_biases
+    sha256: add66cf59b80f9b84926704ee4d8082bf005aa0b7d2654e178cc302741ddc6c6
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_displacement_fwd_2_weights
+    sha256: 5025dfc7f41e291f05347eafb500db468d1214198132db3196849b664321573f
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_heatmap_1_biases
+    sha256: d2e4aa9c55e529179299044da9474879b37849172ed14c6bae91afc80c6335e0
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_heatmap_1_weights
+    sha256: 0994fbf2760b0dfbee475a917671cda7b26a7b0474d5812f1cb42c4be8e0b30f
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_heatmap_2_biases
+    sha256: 8fbf231f489f27e89dba922edc50646f8b7e2ab1374a1c9204d07b7664875bbb
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_heatmap_2_weights
+    sha256: e5423fdc9d91f09633d6570f883e49a5837626d316452eb11718e4eb7b886a0f
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_offset_1_biases
+    sha256: 064625aad5d000c59b9809026a1f2138a7bbc7cbc36c4baf02cafea31986d2b9
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_offset_1_weights
+    sha256: 8ce2099b9485d82d609c30868957ab829f17e44cdb2da4ebb08843df87b56127
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_offset_2_biases
+    sha256: 718da878419cbd456688684d4729ed80343d8c0eee2e88c40969ef0fb630046d
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_offset_2_weights
+    sha256: 97e1bb3d143ebf7a2f00bda66863e0f7231c46068fc4dae8210fe5d8d1ad48b8
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_partheat_1_biases
+    sha256: d6b28e44f89539680bde89775d2ed47464325a564317081999cfb79edddddfac
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_partheat_1_weights
+    sha256: 8d7d13b1730a6b185eeb47a848bee304cf8d94b3557ae1100f51cf3d43cc5823
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_partheat_2_biases
+    sha256: ad6b2e673f2b24edc8117d7ca5e524632d78568981de8b1823ea888e81885d93
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_partheat_2_weights
+    sha256: 1a0006ff57ecffaac5275c9729d60272cee6033fbdab2f06fcda3ca4a32edad4
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_partoff_1_biases
+    sha256: 6352f9fcc4103083283ad3c7d3f79c5aae77d1ddbbcf4fa8c5b7947ce837af33
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_partoff_1_weights
+    sha256: 9da7858f2c2cfe44e632d4b51e92ae37389aeb8edddfcf624465bdddd676f5f9
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_partoff_2_biases
+    sha256: e57cb17fee7d2fdbf18e9e5804bcc4e0a7b1dff53710c500d6c62c5021c96279
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_partoff_2_weights
+    sha256: b1720c66ec383f436169723f1f1953da0906439128f0343b50a656872cf948ce
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_segment_1_biases
+    sha256: 00b13ba80a947417902856db7224ca9986e0e60285e50ed104cda9638b1c8bd9
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_segment_1_weights
+    sha256: 203fca356ad931bc41876190c818760f74f09467ebeb3bf2b3463d04f0b90c36
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_segment_2_biases
+    sha256: 70fe88679d84b3377757b99972c36f0b3c7559160552ba855881c3b864191bfb
+  - url: https://storage.googleapis.com/tfjs-models/weights/posenet/mobilenet_v1_101/MobilenetV1_segment_2_weights
+    sha256: bd1fda64223a399fdb0f83924027367978b99cb251f18d6a8c90bed7c31b2f63
+  file: posenet_101.pth
+export:
+  family: posenet
+  opset: 18
+  simplify: false
+  outputs:
+  - heatmaps
+  - offsets
+  - displacements_fwd
+  - displacements_bwd

@@ -1,5 +1,7 @@
 from dataclasses import asdict, dataclass
 
+DEFAULT_GPU_MEMORY_LIMIT = 6 * 1024**3
+
 
 @dataclass(frozen=True)
 class OrtConfig:
@@ -80,7 +82,7 @@ class OrtConfig:
         return cls(**kwargs)
 
     @classmethod
-    def cuda(cls, device=0, *, memory_limit=6 * 1024**3, **kwargs):
+    def cuda(cls, device=0, *, memory_limit=DEFAULT_GPU_MEMORY_LIMIT, **kwargs):
         if type(device) is not int or device < 0 or memory_limit <= 0:
             raise ValueError(
                 "CUDA device and memory limit must be nonnegative/positive"

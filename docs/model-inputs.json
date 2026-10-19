@@ -1,0 +1,1183 @@
+{
+  "source": "selected FP32 ONNX graph inputs; SHA256 verified",
+  "models": [
+    {
+      "model": "resnet18",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/01/batch1_default/final/model.onnx",
+        "sha256": "5c38ee32927dd92ff100cdebb0d359787362f6eee2089679719114cc673a1c44"
+      }
+    },
+    {
+      "model": "resnet50",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/02/batch1_default/final/model.onnx",
+        "sha256": "1e0c942d16ff8f618038b2f0e73c6420c29e6e3b7ad584ca85e5a72930c956a2"
+      }
+    },
+    {
+      "model": "resnet101",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/03/batch1_default/final/model.onnx",
+        "sha256": "9735a76ec96662c20cd05a2196e92c109f6bf618abe954f7e287fb58d6a89d57"
+      }
+    },
+    {
+      "model": "mobilenet_v1",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          256,
+          256
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            256,
+            256
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/04/batch1_default/final/model.onnx",
+        "sha256": "21e73ffbbd81d07fa1626dedf45c85ee7384aea53e345ffac3068ff22038478e"
+      }
+    },
+    {
+      "model": "mobilenet_v2",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/05/batch1_default/final/model.onnx",
+        "sha256": "2b30bccb3cf9bc419655d80aa3ba941b6471ccc43385b6a7fd811ad3f8a27454"
+      }
+    },
+    {
+      "model": "mobilenet_v3_large",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/06/batch1_default/final/model.onnx",
+        "sha256": "f62c38daa8ef19b93a2c0aad6e48c1d45dd400b0999ed3eab3342c7309531e42"
+      }
+    },
+    {
+      "model": "efficientnet_b0",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/07/batch1_default/final/model.onnx",
+        "sha256": "7ba8976263aa74add03ee05e59004b8dabf3a57c7698d48820b6cf73a7273f70"
+      }
+    },
+    {
+      "model": "efficientnet_lite4",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          380,
+          380
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            380,
+            380
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/08/batch1_default/final/model.onnx",
+        "sha256": "f5147a1a46a4b335342deab8c1f94e5e3c1b33672424afbf06460a88cbc4eb6f"
+      }
+    },
+    {
+      "model": "squeezenet1_1",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/09/batch1_default/final/model.onnx",
+        "sha256": "36af4776bd69a89c787f2d477e8294e2fb82ab312e29ffed0a1fc2f18a54e02c"
+      }
+    },
+    {
+      "model": "shufflenet_v2_x1_0",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/10/batch1_default/final/model.onnx",
+        "sha256": "5041f045494880c474fcdabc599647dee3086898da6615567bfacd87ddd86a35"
+      }
+    },
+    {
+      "model": "vgg16",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/models/11/batch1_default/final/model.onnx",
+        "sha256": "ec771d25114f52451c0e387365b1d936d823f15a59cca8edb4639de757257177"
+      }
+    },
+    {
+      "model": "inception_v3",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          299,
+          299
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            299,
+            299
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/12/network.onnx",
+        "sha256": "3480ddf2aada3a29fbe2325a853177798d2f38e60220ad39a898aec897617733"
+      }
+    },
+    {
+      "model": "efficientnet_lite0",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          224,
+          224
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            224,
+            224
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/results/accuracy_matrix_pot_reduced_20260928/assets/efficientnet_lite0_timm_in1k/model.onnx",
+        "sha256": "f93474bfc6693a0c5ad119f26bfed10620f41983891ea853466114ac356af3bd"
+      }
+    },
+    {
+      "model": "yolov3_tiny",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          416,
+          416
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            416,
+            416
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/13/network.onnx",
+        "sha256": "137c354060f872a487ccae2f534ffd10b945ce27f226c4a547c5c71063f52597"
+      }
+    },
+    {
+      "model": "yolov4_tiny",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          416,
+          416
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            416,
+            416
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/14/network.onnx",
+        "sha256": "af395cec7c13b0d05ebce5d58cd1b989ca7988af25a9f9b6cb92c6f0b294140f"
+      }
+    },
+    {
+      "model": "yolov5n",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          640,
+          640
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            640,
+            640
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/15/network.onnx",
+        "sha256": "89934fb986bee815917b20645bc1d3a0b2ff48350d5218bde1067b41d09e267f"
+      }
+    },
+    {
+      "model": "yolov5s",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          640,
+          640
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            640,
+            640
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/16/network.onnx",
+        "sha256": "5db7ebf0ccb84303a92260626786ef4f3e3da542bc267b2234c7d0f7e31c5bc3"
+      }
+    },
+    {
+      "model": "yolov7_tiny",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          640,
+          640
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            640,
+            640
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/17/network.onnx",
+        "sha256": "ff330e5f1d8b57d798f9f48da5638917fa46ff1e1f536a876763b38d30541f46"
+      }
+    },
+    {
+      "model": "yolov8n",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          640,
+          640
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            640,
+            640
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/18/network.onnx",
+        "sha256": "94c5dc1ab8795053231c8e2bf1bb2bacd06120f34b3fd308bb46f2aa261aa28d"
+      }
+    },
+    {
+      "model": "ssd_mobilenet_v2_320",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          320,
+          320,
+          3
+        ],
+        "layout": "NHWC",
+        "dtype": "uint8"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            300,
+            300
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/19/network.onnx",
+        "sha256": "6f78b98944fa42e70fced186d59f5cc031f6f506275e1d52edfeb9c9a9d77b9b"
+      }
+    },
+    {
+      "model": "nanodet_plus_m_320",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          320,
+          320
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            320,
+            320
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/20/network.onnx",
+        "sha256": "daa64a73ede6edd5f32aaf6cbc46ebcbaa8b403a14e755e60f933a6307032679"
+      }
+    },
+    {
+      "model": "retinanet_resnet50_fpn",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          800,
+          800
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            800,
+            800
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/22/network.onnx",
+        "sha256": "111d2d554cfde2e26bdfde8215b572950697c06bbc290097bd49d7f09b1f458e"
+      }
+    },
+    {
+      "model": "yolov9_t",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          "height",
+          "width"
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            "height",
+            "width"
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/assets/yolov9_t/model.onnx",
+        "sha256": "7130502091b0f62bc882c55e7395a7249e03e18e88d7bffa24ebf5812068b549"
+      }
+    },
+    {
+      "model": "yolox",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          640,
+          640
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            "height",
+            "width"
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/assets/yolox/model.onnx",
+        "sha256": "4ef58d814663b4aa5e4cc7cbce3bdce13008c1e2e90da2f367529d84bf8721db"
+      }
+    },
+    {
+      "model": "yolov3_full",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          416,
+          416
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            416,
+            416
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/yolo_capacity_20261013/assets/yolov3_full/model.onnx",
+        "sha256": "4314c312ae7d15cb7eb6b7141f5535627c99bae970058243e92ec30d17e21fbc"
+      }
+    },
+    {
+      "model": "yolov4_full",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          416,
+          416
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            416,
+            416
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/yolo_capacity_20261013/assets/yolov4_full/model.onnx",
+        "sha256": "c724108935da5487dbb942f64fdc1d2d0a395e7b264a2dd4675c0f4cc4bc6551"
+      }
+    },
+    {
+      "model": "yolov7_full",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          640,
+          640
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            640,
+            640
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/yolo_capacity_20261013/assets/yolov7_full/model.onnx",
+        "sha256": "fac21eb1234177777aec9b8ec3e1da5501a286d3a115049b4259bcb2f36dfec1"
+      }
+    },
+    {
+      "model": "yolov9_s",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          "height",
+          "width"
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            "height",
+            "width"
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/yolo_capacity_20261013/assets/yolov9_s/model.onnx",
+        "sha256": "48b0abe1452f492277ace538ef1442844b22cb991039f8ebe60cb384f4adf4b4"
+      }
+    },
+    {
+      "model": "retinaface_mnet025_640",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          640,
+          640
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            640,
+            640
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/27/network.onnx",
+        "sha256": "878110278abb73fc0745510567a6693b08bed80651a8c85719ab8798a37c54fc"
+      }
+    },
+    {
+      "model": "yolov7_face",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          "height",
+          "width"
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            "height",
+            "width"
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/adaround_cnn33_face_lite_20261011/assets/yolov7_face/model.onnx",
+        "sha256": "69d9cb44f9f9d31b51782957fdd69b73c9eece24d814314c2269b38d8547de77"
+      }
+    },
+    {
+      "model": "posenet_101",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          513,
+          513
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            513,
+            513
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/29/network.onnx",
+        "sha256": "e57ef8a026d670c365b815e95761a9d9fae35425954234db31a1a70216bc9fe7"
+      }
+    },
+    {
+      "model": "deeplabv3_mnv2_voc",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          513,
+          513,
+          3
+        ],
+        "layout": "NHWC",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            513,
+            513,
+            3
+          ],
+          "layout": "NHWC"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-repo/storage/artifacts/boundary_artifacts_v1/37/network.onnx",
+        "sha256": "2db575667473ba0971cea90e099893909da7c371b6276412e593f66da016688f"
+      }
+    },
+    {
+      "model": "unet_resnet50_voc",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          512,
+          512
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            512,
+            512
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/assets/unet_resnet50_voc/model.onnx",
+        "sha256": "fe2c73ec6240b7806973b2da9a724b96c4a4403f271580fa3d5f8522cb8f1113"
+      }
+    },
+    {
+      "model": "deeplabv3_r50_voc",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          "height",
+          "width"
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            "height",
+            "width"
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/adaround_cnn33_20261005/assets/deeplabv3_r50_voc/model.onnx",
+        "sha256": "ee4a4f757926268a10a4eba83a1398bc194ac4ae04ff5cb7ac4c226ecede55d2"
+      }
+    },
+    {
+      "model": "fcn_r50_voc",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          "height",
+          "width"
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            "height",
+            "width"
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/assets/fcn_r50_voc/model.onnx",
+        "sha256": "800cb929044f0b9213d80cdb9fdaec67260e1314afe95a0f1e2ddf13b78c5c06"
+      }
+    },
+    {
+      "model": "deeplabv3plus_r50_voc",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          "height",
+          "width"
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            "height",
+            "width"
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/deeplab_arcface_20261014/assets/deeplabv3plus_r50_voc/model.onnx",
+        "sha256": "5850da0e4da57141954505b1031a176779e07e1a76ae69f8a44b3f0d75631b0e"
+      }
+    },
+    {
+      "model": "yolov5s_seg",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          "height",
+          "width"
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            "height",
+            "width"
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/assets/yolov5s_seg/model.onnx",
+        "sha256": "3b7248ebaf9c35eafb6382935704c4a8f0f87af29292df2ddaa53a0b9a009fd9"
+      }
+    },
+    {
+      "model": "mobilefacenet_relu_foamliu",
+      "recipe_input": {
+        "name": "images",
+        "shape": [
+          1,
+          3,
+          112,
+          112
+        ],
+        "layout": "NCHW",
+        "dtype": "float32"
+      },
+      "network_inputs": [
+        {
+          "name": "images",
+          "dtype": "FLOAT",
+          "shape": [
+            1,
+            3,
+            112,
+            112
+          ],
+          "layout": "NCHW"
+        }
+      ],
+      "network": {
+        "id": "artifact://research-runs/mobilefacenet_relu_20261014/assets/mobilefacenet_relu_foamliu/model.onnx",
+        "sha256": "76b19bfa5fcda1c869d31a6d660e55065b5d4df997f643c1afdae6244d0fd115"
+      }
+    }
+  ]
+}

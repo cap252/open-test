@@ -5,7 +5,7 @@ import io
 import json
 import math
 from pathlib import Path
-from ._io import atomic_json, read_json, object_hash
+from ._io import atomic_json, read_json
 from ._identity import compare_identity_evidence
 
 SCHEMA_VERSION = 1
@@ -198,6 +198,12 @@ def raw_export_row(row):
 def tables(records):
     lookup = {}
     for r in records:
+        if r.get("origin") == "historical_research":
+            raise ValueError(
+                "Unsupported record origin 'historical_research' for "
+                f"run '{r.get('run_id')}', model '{r.get('model')}', "
+                f"condition '{r.get('condition')}'; historical records are no longer supported."
+            )
         key = (r["run_id"], r["model"], r["condition"])
         if key in lookup:
             raise ValueError("Duplicate measurement record: " + str(key))
@@ -222,14 +228,6 @@ def tables(records):
                 dataset=row.get("dataset"),
                 split=row.get("split"),
             )
-            if row.get("origin") == "historical_research":
-                # Older evaluation_identity did not cover the execution protocol.
-                identity.update(
-                    code_identity=evidence.get("source_code_identity"),
-                    environment_identity=object_hash(evidence["runtime"])
-                    if evidence.get("runtime")
-                    else None,
-                )
             return identity
 
         pair_state, pair_reason = compare_identity_evidence(
@@ -303,17 +301,6 @@ def tables(records):
             pairing_status=pair_state,
             pairing_reason=pair_reason,
         )
-        if "comparison" in r:
-            comparison = r["comparison"]
-            row.update(
-                condition_family=comparison["family"],
-                activation_recalibration=comparison["activation_recalibration"],
-                evaluation_batch_size=comparison["evaluation_batch_size"],
-                optimization=comparison["optimization"],
-                selection_basis=comparison["selection_basis"],
-            )
-            if comparison["activation_recalibration"]:
-                row["scheme"] += "/activation_recalibration"
         rows.append(row)
         for key, item in measured.items():
             details.append(
@@ -383,6 +370,9 @@ def report_policy(value):
         "detection",
         "face",
         "segmentation",
+        "keypoints",
+        "instance_segmentation",
+        "face_verification",
     }:
         raise ValueError("Invalid report primary_metric mapping")
     if any(not isinstance(v, str) or not v.strip() for v in primary.values()):
@@ -398,9 +388,15 @@ def report_policy(value):
     return dict(primary_metric=dict(primary), target_mean_recovery=target)
 
 
-def export_records(records, directory, *, metadata=None, formats=None):
+def export_records(
+    records, directory, *, metadata=None, formats=None, table_profile=None
+):
     """Write selected raw records and tables; omitted formats preserves all outputs."""
     selected = normalize_formats(formats)
+    if table_profile:
+        from .raw_report import build_report, write_report
+
+        compatible = build_report(records, profile=table_profile)
     rows, metrics = tables(records)
     raw_rows = [raw_export_row(row) for row in rows]
     directory = Path(directory)
@@ -425,6 +421,8 @@ def export_records(records, directory, *, metadata=None, formats=None):
                 schema_version=SCHEMA_VERSION, metadata=metadata or {}, records=records
             ),
         )
+    if table_profile:
+        write_report(compatible, directory, source=metadata)
     return rows
 
 

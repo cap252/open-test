@@ -45,7 +45,8 @@ def wider_face_ap(detections_by_image, ground_truth):
     ground_truth:        [{image_id, boxes: [[x, y, w, h], ...], keep: {easy: [...], ...}}, ...]
                          with `keep` holding the 0-based indices of the faces counted per setting
     Every ground-truth image must have an entry (possibly empty); scores are min-max normalized
-    over the whole set exactly as the reference implementation does.
+    over the whole set exactly as the reference implementation does. A setting without counted
+    faces (possible on a limited subset) has no AP and is omitted; no detections give AP 0.
     """
     missing = [
         item["image_id"]
@@ -56,19 +57,21 @@ def wider_face_ap(detections_by_image, ground_truth):
         raise ValueError(
             "WIDER FACE images without a detection record: " + str(missing[:5])
         )
+    faces = {
+        setting: sum(len(item["keep"][setting]) for item in ground_truth)
+        for setting in WIDER_SETTINGS
+    }
+    settings = [setting for setting in WIDER_SETTINGS if faces[setting]]
     all_scores = [row[4] for rows in detections_by_image.values() for row in rows]
     if not all_scores:
-        raise ValueError("No WIDER FACE detections at all")
+        return {"AP_" + setting: 0.0 for setting in settings}
     lowest, highest = min(all_scores), max(all_scores)
     span = highest - lowest
     if span <= 0:
         raise ValueError("WIDER FACE scores cannot be normalized")
     thresholds = 1 - (np.arange(WIDER_SCORE_THRESHOLDS) + 1) / WIDER_SCORE_THRESHOLDS
 
-    curves = {
-        setting: np.zeros((WIDER_SCORE_THRESHOLDS, 2)) for setting in WIDER_SETTINGS
-    }
-    faces = dict.fromkeys(WIDER_SETTINGS, 0)
+    curves = {setting: np.zeros((WIDER_SCORE_THRESHOLDS, 2)) for setting in settings}
     for item in ground_truth:
         rows = np.asarray(detections_by_image[item["image_id"]], np.float64).reshape(
             -1, 5
@@ -76,8 +79,6 @@ def wider_face_ap(detections_by_image, ground_truth):
         rows = rows[np.argsort(-rows[:, 4], kind="stable")]
         truth = np.asarray(item["boxes"], np.float64).reshape(-1, 4)
         if not len(truth) or not len(rows):
-            for setting in WIDER_SETTINGS:
-                faces[setting] += len(item["keep"][setting])
             continue
         scores = (rows[:, 4] - lowest) / span
         detection_boxes = np.column_stack(
@@ -96,9 +97,8 @@ def wider_face_ap(detections_by_image, ground_truth):
         best_overlap = overlaps.max(axis=1)
         # Number of detections with a normalized score >= each threshold (scores are descending).
         counted = np.searchsorted(-scores, -thresholds, side="right")
-        for setting in WIDER_SETTINGS:
+        for setting in settings:
             keep = item["keep"][setting]
-            faces[setting] += len(keep)
             counts_face = np.zeros(len(truth), bool)
             counts_face[list(keep)] = (
                 True  # an image without counted faces still adds false positives
@@ -125,7 +125,7 @@ def wider_face_ap(detections_by_image, ground_truth):
             curves[setting][active, 1] += recalled[last]
 
     result = {}
-    for setting in WIDER_SETTINGS:
+    for setting in settings:
         proposals, recalled = curves[setting][:, 0], curves[setting][:, 1]
         # No proposal at a threshold means precision 0 there (the reference would divide by zero).
         precision = np.divide(

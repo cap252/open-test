@@ -7,16 +7,29 @@ from .._io import read_json, sha256
 
 
 class ModelBundle:
-    def __init__(self, spec, directory):
+    """An exported model folder: network.onnx plus optional CPU host graphs.
+
+    Files are checked against model.json when present. prepare() turns a preprocessed
+    image into network feeds; finish() runs the postprocess graph on the outputs.
+    """
+
+    def __init__(self, spec, directory, *, paths=None):
         self.spec, self.directory = spec, Path(directory)
-        self.paths = {k: self.directory / v for k, v in spec.recipe["graphs"].items()}
+        self.paths = (
+            {k: Path(v) for k, v in paths.items()}
+            if paths is not None
+            else {k: self.directory / v for k, v in spec.recipe["graphs"].items()}
+        )
         missing = [str(v) for v in self.paths.values() if not v.is_file()]
         if missing:
             raise FileNotFoundError(
                 "Export " + spec.name + " first. Missing: " + ", ".join(missing)
             )
         manifest = self.directory / "model.json"
-        manifest_data = read_json(manifest) if manifest.exists() else None
+        manifest_data = (
+            read_json(manifest) if paths is None and manifest.exists() else None
+        )
+        self.validation = (manifest_data or {}).get("validation", {})
         if manifest_data is not None:
             recorded = manifest_data["files"]
             for key, path in self.paths.items():

@@ -1,0 +1,15 @@
+# Isolated legacy export worker (Python 3.10/3.11), never sync into the main environment.
+# Install the CPU Torch wheels first and compiled MMCV from the matching upstream index.
+# python -m pip install torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cpu
+# python -m pip install mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.1/index.html
+numpy==1.26.4
+onnx==1.17.0
+onnxruntime-gpu==1.20.2
+PyYAML==6.0.2
+pillow==11.1.0
+opencv-python-headless==4.11.0.86
+mmengine==0.10.7
+mmsegmentation==1.2.2
+mmcv==2.1.0
+ftfy==6.3.1
+regex==2024.11.6

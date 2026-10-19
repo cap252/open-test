@@ -3,7 +3,13 @@ from importlib.resources import files
 import random, re
 from .._io import atomic_json, read_json, sha256
 
-COUNTS = {"imagenet": 50000, "coco": 5000, "widerface": 3226, "voc": 1449}
+COUNTS = {
+    "imagenet": 50000,
+    "coco": 5000,
+    "widerface": 3226,
+    "voc": 1449,
+    "coco_keypoints": 5000,
+}
 
 
 def identifiers(name):
@@ -17,9 +23,21 @@ def identifiers(name):
     ]
 
 
-def prepare(name, root, destination, *, source="folder", download=False):
+def prepare(name, root, destination, *, source="folder", download=False, smoke=False):
+    """Write a manifest listing calibration and validation images; images are not copied.
+
+    Checks expected counts, paths, labels and that calibration and validation images
+    do not overlap (by content hash). LFW writes aligned crops; smoke selects its
+    fixed two-pair functional subset.
+    """
     root = Path(root).expanduser().resolve()
     destination = Path(destination)
+    if name == "lfw_mobilefacenet":
+        from .lfw import prepare_lfw
+
+        return prepare_lfw(root, destination, smoke=smoke, download=download)
+    if smoke:
+        raise ValueError("--smoke selects the fixed LFW pair subset only")
     if name not in COUNTS:
         raise ValueError("Unknown dataset")
     if download:
@@ -33,6 +51,7 @@ def prepare(name, root, destination, *, source="folder", download=False):
     reference = False
     if name == "imagenet":
         if source == "hf" or (root / "validation_images").is_dir():
+            source = "hf"  # record the layout actually used
             validation = []
             for path in sorted((root / "validation_images").glob("*.jpg")):
                 match = re.fullmatch(r"img_(\d+)_label_(\d+)\.jpg", path.name)
@@ -92,8 +111,12 @@ def prepare(name, root, destination, *, source="folder", download=False):
             validation = listing(val)
             training = listing(train)
             calibration = random.Random(20260917).sample(training, 1000)
-    elif name == "coco":
-        annotation = "annotations/instances_val2017.json"
+    elif name in ("coco", "coco_keypoints"):
+        annotation = "annotations/" + (
+            "person_keypoints_val2017.json"
+            if name == "coco_keypoints"
+            else "instances_val2017.json"
+        )
         doc = read_json(root / annotation)
         annotations["coco"] = annotation
         validation = [
@@ -102,7 +125,9 @@ def prepare(name, root, destination, *, source="folder", download=False):
         ]
         calibration = [
             dict(id=int(row[0]), path=f"train2017/{int(row[0]):012d}.jpg")
-            for row in identifiers(name)
+            for row in identifiers(
+                "coco_keypoints" if name == "coco_keypoints" else "coco"
+            )
         ]
     elif name == "voc":
         names = (root / "ImageSets/Segmentation/val.txt").read_text().split()
@@ -115,10 +140,7 @@ def prepare(name, root, destination, *, source="folder", download=False):
         ]
         annotations["split"] = "ImageSets/Segmentation/val.txt"
     else:
-        # Conversion output lives next to this manifest; keep source dataset untouched.
         truth = wider_ground_truth(root)
-        target = destination.parent / "wider_ground_truth.json"
-        atomic_json(target, truth)
         validation = [
             dict(id=i, path=row["path"], truth=row) for i, row in enumerate(truth)
         ]

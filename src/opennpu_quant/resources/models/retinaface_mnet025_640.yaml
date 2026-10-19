@@ -10,7 +10,6 @@ input:
   - 3
   - 640
   - 640
-  dtype: float32
   layout: NCHW
 graphs:
   network: network.onnx
@@ -38,19 +37,12 @@ decode:
     - 8
     - 16
     - 32
-    clip: false
   variance:
   - 0.1
   - 0.2
   score_threshold: 0.02
   nms_iou: 0.4
   max_detections: 750
-  rescale: per_axis_clip
-  record: wider_int_xywh
-metric_params:
-  iou: 0.5
-  thresholds: 1000
-  setting: medium
 source:
   repo: https://github.com/biubug6/Pytorch_Retinaface
   commit: b984b4b775b2c4dced95c1eadd195a5c7d32a60b
@@ -75,8 +67,6 @@ export:
     - /LandmarkHead.1/conv1x1/Conv_output_0
     - /LandmarkHead.2/conv1x1/Conv_output_0
   framework_parity:
-    rtol: 0.0001
-    atol: 1.0e-05
     output_absolute_bounds:
       loc: 0.0001
       landmarks: 0.0001

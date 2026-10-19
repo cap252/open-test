@@ -100,6 +100,9 @@ class AdaroundConfig:
         GPU index comes from OrtConfig, not a 'cuda:N' value here.
     atol, rtol : float
         Nonnegative local-operation parity bounds, defaults 1e-5 and 1e-4.
+    validation : str
+        Strict by default. Functional smoke records finite numerical mismatches
+        in each layer audit; shapes and dtypes must still match.
         All floating settings must be finite. Do not loosen bounds to hide failures.
 
     Examples
@@ -123,10 +126,12 @@ class AdaroundConfig:
     device: str = "auto"
     atol: float = 1e-5
     rtol: float = 1e-4
+    validation: str = "strict"
 
     def __post_init__(self):
         import math
 
+        # Messages name the field; experiment validation prefixes "adaround.".
         for key in (
             "steps",
             "batch_size",
@@ -135,35 +140,38 @@ class AdaroundConfig:
             "window_steps",
         ):
             if type(getattr(self, key)) is not int or getattr(self, key) < 1:
-                raise ValueError("AdaRound requires a positive integer: " + key)
+                raise ValueError(f"{key} must be an integer >= 1")
         if type(self.seed) is not int or self.seed < 0:
-            raise ValueError("AdaRound seed must be a nonnegative integer")
-        values = (
-            self.learning_rate,
-            self.regularization,
-            self.beta_start,
-            self.beta_end,
-            self.warmup_fraction,
-            self.atol,
-            self.rtol,
-        )
-        if not all(math.isfinite(v) for v in values):
-            raise ValueError("Nonfinite AdaRound configuration")
-        if (
-            self.learning_rate <= 0
-            or self.regularization < 0
-            or not 0 <= self.warmup_fraction < 1
+            raise ValueError("seed must be an integer >= 0")
+        for key in (
+            "learning_rate",
+            "regularization",
+            "beta_start",
+            "beta_end",
+            "warmup_fraction",
+            "atol",
+            "rtol",
         ):
-            raise ValueError("Invalid AdaRound learning/loss policy")
-        if (
-            self.beta_start < self.beta_end
-            or self.beta_end <= 0
-            or self.atol < 0
-            or self.rtol < 0
-        ):
-            raise ValueError("Invalid AdaRound beta/parity policy")
+            value = getattr(self, key)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+            ):
+                raise ValueError(f"{key} must be a finite number")
+        if self.learning_rate <= 0:
+            raise ValueError("learning_rate must be > 0")
+        if not 0 <= self.warmup_fraction < 1:
+            raise ValueError("warmup_fraction must be in [0, 1)")
+        for key in ("regularization", "atol", "rtol"):
+            if getattr(self, key) < 0:
+                raise ValueError(f"{key} must be >= 0")
+        if not self.beta_start >= self.beta_end > 0:
+            raise ValueError("beta_start must be >= beta_end > 0")
+        if self.validation not in ("strict", "functional"):
+            raise ValueError("validation must be strict or functional")
         if self.device not in ("auto", "cpu", "cuda"):
-            raise ValueError("AdaRound device must be auto/cpu/cuda")
+            raise ValueError("device must be auto, cpu or cuda")
 
     def to_dict(self):
         return asdict(self)
@@ -181,7 +189,7 @@ class AdaroundConfig:
 
 @dataclass(frozen=True)
 class QuantizationConfig:
-    """Immutable explicit INT8 QDQ policy; defaults preserve the basic API path.
+    """Immutable explicit INT8 QDQ policy (defaults: basic scope, MinMax, per-tensor).
 
     Attributes
     ----------
@@ -263,6 +271,7 @@ class QuantizationConfig:
         return cls(**values)
 
     def scheme(self):
+        """Flat policy dict consumed by quant.engine (not a public Scheme object)."""
         result = dict(
             scope=self.scope,
             activation_symmetric=self.activation_symmetric,

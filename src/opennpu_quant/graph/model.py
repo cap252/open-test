@@ -7,6 +7,10 @@ from opennpu_quant._io import object_hash, sha256
 
 
 def load_model(source):
+    """Owned copy of an ONNX model with external weights inlined.
+
+    External data files must stay inside the model's folder.
+    """
     if isinstance(source, (str, Path)):
         path = Path(source).resolve()
         header = onnx.load(path, load_external_data=False)

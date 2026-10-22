@@ -5,8 +5,9 @@ import io
 import json
 import math
 from pathlib import Path
-from ._io import atomic_json, read_json, object_hash
+from ._io import atomic_json, read_json
 from ._identity import compare_identity_evidence
+from .data.lfw_protocol import reject_partial_result
 
 SCHEMA_VERSION = 1
 SUCCESS = {"completed", "evaluated", "reused"}
@@ -57,6 +58,35 @@ def percent(metric):
     if metric.get("unit") == "percent":
         return value
     return None  # Unknown units and e.g. dB must not silently become percentages.
+
+
+def recovery_percent(metric, baseline, *, is_baseline=False):
+    """Compute recovery for an already matched pair of measurements."""
+    if not metric or not baseline:
+        return None
+    for item in (metric, baseline):
+        value = item.get("value")
+        if value is None:
+            return None
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            raise ValueError("Nonfinite or nonnumeric metric")
+    unit, base_unit = metric.get("unit"), baseline.get("unit")
+    if unit not in {"fraction", "percent"} or base_unit not in {"fraction", "percent"}:
+        return None
+    value, denominator = metric["value"], baseline["value"]
+    if unit != base_unit:
+        value = value / 100 if unit == "percent" else value
+        denominator = denominator / 100 if base_unit == "percent" else denominator
+    if denominator <= 0:
+        return None
+    if is_baseline:
+        return 100.0
+    # Preserve the reference operation order before display-unit conversion.
+    return 100 * value / denominator
 
 
 def normalize_scheme(value, adaround=None):
@@ -198,6 +228,13 @@ def raw_export_row(row):
 def tables(records):
     lookup = {}
     for r in records:
+        reject_partial_result(r)
+        if r.get("origin") == "historical_research":
+            raise ValueError(
+                "Unsupported record origin 'historical_research' for "
+                f"run '{r.get('run_id')}', model '{r.get('model')}', "
+                f"condition '{r.get('condition')}'; historical records are no longer supported."
+            )
         key = (r["run_id"], r["model"], r["condition"])
         if key in lookup:
             raise ValueError("Duplicate measurement record: " + str(key))
@@ -222,14 +259,6 @@ def tables(records):
                 dataset=row.get("dataset"),
                 split=row.get("split"),
             )
-            if row.get("origin") == "historical_research":
-                # Older evaluation_identity did not cover the execution protocol.
-                identity.update(
-                    code_identity=evidence.get("source_code_identity"),
-                    environment_identity=object_hash(evidence["runtime"])
-                    if evidence.get("runtime")
-                    else None,
-                )
             return identity
 
         pair_state, pair_reason = compare_identity_evidence(
@@ -263,8 +292,10 @@ def tables(records):
             value_pct=value,
             fp32_pct=fp,
             delta_pp=value - fp if value is not None and fp is not None else None,
-            recovery_pct=100 * value / fp
-            if value is not None and fp is not None and fp > 0
+            recovery_pct=recovery_percent(
+                measured.get(metric), base_metrics.get(metric), is_baseline=r is b
+            )
+            if matched
             else None,
             samples=r.get("samples"),
             expected_samples=r.get("expected_samples"),
@@ -303,17 +334,6 @@ def tables(records):
             pairing_status=pair_state,
             pairing_reason=pair_reason,
         )
-        if "comparison" in r:
-            comparison = r["comparison"]
-            row.update(
-                condition_family=comparison["family"],
-                activation_recalibration=comparison["activation_recalibration"],
-                evaluation_batch_size=comparison["evaluation_batch_size"],
-                optimization=comparison["optimization"],
-                selection_basis=comparison["selection_basis"],
-            )
-            if comparison["activation_recalibration"]:
-                row["scheme"] += "/activation_recalibration"
         rows.append(row)
         for key, item in measured.items():
             details.append(
@@ -383,6 +403,9 @@ def report_policy(value):
         "detection",
         "face",
         "segmentation",
+        "keypoints",
+        "instance_segmentation",
+        "face_verification",
     }:
         raise ValueError("Invalid report primary_metric mapping")
     if any(not isinstance(v, str) or not v.strip() for v in primary.values()):
@@ -398,9 +421,15 @@ def report_policy(value):
     return dict(primary_metric=dict(primary), target_mean_recovery=target)
 
 
-def export_records(records, directory, *, metadata=None, formats=None):
+def export_records(
+    records, directory, *, metadata=None, formats=None, table_profile=None
+):
     """Write selected raw records and tables; omitted formats preserves all outputs."""
     selected = normalize_formats(formats)
+    if table_profile:
+        from .raw_report import build_report, write_report
+
+        compatible = build_report(records, profile=table_profile)
     rows, metrics = tables(records)
     raw_rows = [raw_export_row(row) for row in rows]
     directory = Path(directory)
@@ -425,6 +454,8 @@ def export_records(records, directory, *, metadata=None, formats=None):
                 schema_version=SCHEMA_VERSION, metadata=metadata or {}, records=records
             ),
         )
+    if table_profile:
+        write_report(compatible, directory, source=metadata)
     return rows
 
 
@@ -437,5 +468,7 @@ def read_records(path):
     value = read_json(path)
     if value.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("Unsupported measurement record schema")
+    if value.get("functional_checks"):
+        reject_partial_result({"evaluation_mode": "functional_check"})
     tables(value["records"])
     return value

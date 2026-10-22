@@ -1,0 +1,26 @@
+{
+  "example-full": {
+    "source": {
+      "run_sha256": "6083e6c9826062dd236a9262cd1432e1384ed44afd1af29e41556e32f1001933",
+      "prepared_sha256": "0d95abe405bd8a45fb5d2f89517c5a1e059e7fa4677b5b1eafcf72d00a516a2f",
+      "selection_identity": "8561ec5c90feedd777a590ad1e1d01d964032588d26b9e5d9a429b75b3989e06",
+      "verification": "sealed evaluation metadata; no inference or external model reads"
+    },
+    "files": {
+      "raw_data.csv": "c734bb21b761b0a03427229453d5d30e23e29207b5c4fea79892484eb8303c5a",
+      "raw_data.tsv": "690475871abe2e1488266355bd44192f8f919ea4d2a88fcf49e8823faf9d7ce9"
+    }
+  },
+  "example-partial": {
+    "source": {
+      "run_sha256": "b242491d44b73c40741d74da2096783eda161115e532e26a58700e08ff49e945",
+      "prepared_sha256": "d308f196a7914aaa6b8cbbdf8995094de4882a950a7493962361b24076dee7e4",
+      "selection_identity": "694cb2d2d37443df92a3ef2ddb1f3c58570e6a51c0cc897765ab8aa5c7c715e8",
+      "verification": "sealed evaluation metadata; no inference or external model reads"
+    },
+    "files": {
+      "raw_data.partial.csv": "2a22dcd5aa4dac978920257d0cb57c4f2abb1c93c5c1418e5c2c23c9aa8e66a4",
+      "raw_data.partial.tsv": "e0f03722dcf8e0d21d99d090224b689c485101835585e5f8391366b4250c8aa7"
+    }
+  }
+}

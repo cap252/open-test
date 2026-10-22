@@ -1,12 +1,17 @@
 import copy
 import hashlib
 from pathlib import Path
+from google.protobuf.message import DecodeError
 import onnx
 from onnx.external_data_helper import _get_all_tensors, convert_model_from_external_data
 from opennpu_quant._io import object_hash, sha256
 
 
 def load_model(source):
+    """Owned copy of an ONNX model with external weights inlined.
+
+    External data files must stay inside the model's folder.
+    """
     if isinstance(source, (str, Path)):
         path = Path(source).resolve()
         header = onnx.load(path, load_external_data=False)
@@ -43,17 +48,32 @@ def model_identity(source):
     ).hexdigest()
 
 
-def bundle_identity(path):
+def external_data_files(path):
+    """Resolve referenced weight files without loading their tensor contents."""
     path = Path(path).resolve()
-    model = onnx.load(path, load_external_data=False)
-    rows = {path.name: sha256(path)}
+    try:
+        model = onnx.load(path, load_external_data=False)
+    except DecodeError as error:
+        raise ValueError("Invalid ONNX graph: " + str(path)) from error
+    rows = {}
     for tensor in _get_all_tensors(model):
         if tensor.data_location == onnx.TensorProto.EXTERNAL:
-            name = dict(((v.key, v.value) for v in tensor.external_data))["location"]
+            name = dict((v.key, v.value) for v in tensor.external_data).get("location")
+            if not name or Path(name).is_absolute():
+                raise ValueError("External data must use a relative bundle path")
             child = (path.parent / name).resolve()
             if not child.is_relative_to(path.parent):
                 raise ValueError("External data escapes bundle")
-            rows[name] = sha256(child)
+            rows[name] = child
+    return rows
+
+
+def bundle_identity(path):
+    path = Path(path).resolve()
+    rows = {path.name: sha256(path)}
+    rows.update(
+        {name: sha256(child) for name, child in external_data_files(path).items()}
+    )
     return {"identity": object_hash(rows), "files": rows}
 
 

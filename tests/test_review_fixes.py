@@ -226,22 +226,17 @@ class ValidationFixTests(unittest.TestCase):
             ]
         )
 
-    def test_fixed_recipe_settings_are_checked(self):
+    def test_recipe_layout_must_match_preprocessing(self):
         from opennpu_quant.models.spec import ModelSpec, model_names
 
         for name in model_names():
             ModelSpec.load(name)
         cases = [
-            ("resnet18", ("export", "framework_parity", "rtol"), 0.01),
-            ("resnet18", ("export", "framework_parity", "require_top5_order"), False),
-            ("resnet18", ("input", "dtype"), "float16"),
-            ("ssd_mobilenet_v2_320", ("preprocess", "interpolation"), "bicubic"),
-            ("ssd_mobilenet_v2_320", ("decode", "boxes_to"), "xyxy"),
-            ("deeplabv3_mnv2_voc", ("metric_params", "ignore_label"), 0),
-            ("deeplabv3_mnv2_voc", ("preprocess", "pad"), "center"),
-            ("retinaface_mnet025_640", ("decode", "priors", "clip"), True),
-            ("retinaface_mnet025_640", ("metric_params", "thresholds"), 10),
-            ("yolov5s", ("decode", "nms", "per_class"), False),
+            ("resnet18", ("input", "layout"), "NHWC"),
+            ("ssd_mobilenet_v2_320", ("input", "layout"), "NCHW"),
+            ("deeplabv3_mnv2_voc", ("input", "layout"), "CHW"),
+            ("yolov5s", ("input", "layout"), None),
+            ("resnet18", ("export", "framework_parity"), []),
         ]
         for name, path, value in cases:
             with self.subTest(name=name, path=path):
@@ -304,50 +299,6 @@ class ValidationFixTests(unittest.TestCase):
         self.assertEqual(
             ("CPUExecutionProvider",), OrtConfig.cpu().to_dict()["providers"]
         )
-
-    def test_asset_download_install_is_atomic_and_rejects_replacement(self):
-        import tarfile
-        import yaml
-        from unittest.mock import patch
-        from opennpu_quant.fetch import fetch_assets
-        from opennpu_quant.paths import Paths
-
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            archive = root / "bundle.tar.gz"
-            with tarfile.open(archive, "w:gz") as tar:
-                item = tarfile.TarInfo("network.onnx")
-                item.size = 5
-                tar.addfile(item, io.BytesIO(b"model"))
-            manifest = root / "assets.yaml"
-            manifest.write_text(
-                yaml.safe_dump(
-                    {
-                        "models": {
-                            "toy": {"url": archive.as_uri(), "sha256": sha256(archive)}
-                        }
-                    }
-                )
-            )
-            paths = Paths.resolve(home=root / "workspace")
-            installed = fetch_assets("models", manifest, ["toy"], paths)
-            self.assertEqual(
-                b"model", (Path(installed[0]) / "network.onnx").read_bytes()
-            )
-            with self.assertRaisesRegex(ValueError, "already exists"):
-                fetch_assets("models", manifest, ["toy"], paths)
-            self.assertEqual(
-                b"model", (Path(installed[0]) / "network.onnx").read_bytes()
-            )
-            second = Paths.resolve(home=root / "interrupted")
-            with patch(
-                "opennpu_quant.fetch.extract_archive",
-                side_effect=ValueError("broken archive"),
-            ):
-                with self.assertRaisesRegex(ValueError, "broken archive"):
-                    fetch_assets("models", manifest, ["toy"], second)
-            self.assertFalse((second.models / "toy").exists())
-            self.assertFalse(list(second.models.glob(".asset_*")))
 
     def test_optional_torch_cache_suite(self):
         code = """import importlib.abc, importlib.util, sys, unittest

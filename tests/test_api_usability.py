@@ -3,10 +3,14 @@
 import contextlib
 import copy
 import doctest
+import importlib
 import inspect
 import io
 import json
+from tests.library_fixtures import small_config
+
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -16,7 +20,6 @@ from unittest.mock import patch
 import opennpu_quant as api
 from opennpu_quant._feeds import feed_digest
 from opennpu_quant._io import atomic_json, read_json
-from opennpu_quant.configuration import load_config
 from opennpu_quant.paths import Paths
 from opennpu_quant.runner import run
 from tests.library_fixtures import toy_model, feeds
@@ -32,6 +35,27 @@ class PublicDocumentationTests(unittest.TestCase):
             name: str(inspect.signature(getattr(api, name))) for name in api.__all__
         }
         self.assertEqual(expected, actual)
+
+    def test_documented_internal_imports_keep_their_signatures(self):
+        """Docs that import beyond the public names rely on these exact signatures."""
+        expected = json.loads(
+            (Path(__file__).parent / "fixtures/documented_internals.json").read_text()
+        )
+        root = Path(__file__).parents[1]
+        documented = set()
+        for page in [root / "README.md", *sorted((root / "docs").rglob("*.md"))]:
+            for module, names in re.findall(
+                r"^from (opennpu_quant\.[\w.]+) import ([\w, ]+)$",
+                page.read_text(encoding="utf-8"),
+                re.M,
+            ):
+                documented.update(f"{module}.{n.strip()}" for n in names.split(","))
+        self.assertEqual(sorted(expected), sorted(documented))
+        for path, signature in expected.items():
+            module, name = path.rsplit(".", 1)
+            with self.subTest(path=path):
+                value = getattr(importlib.import_module(module), name)
+                self.assertEqual(signature, str(inspect.signature(value)))
 
     def test_each_public_name_has_contract_and_example(self):
         for name in api.__all__:
@@ -113,7 +137,7 @@ class ReuseGuidanceTests(unittest.TestCase):
         local = self.root / "local.yaml"
         local.write_text("{}\n")
         self.paths = Paths.resolve(home=self.root, local=local)
-        self.config = load_config("quick")
+        self.config = small_config()
 
     def config_conflict(self, before, after):
         out = self.paths.runs / after["name"]
@@ -217,9 +241,7 @@ class ReuseGuidanceTests(unittest.TestCase):
             for p in out.rglob("*.json")
             if p.name in ("complete.json", "result.json")
         }
-        with patch(
-            "opennpu_quant.runner._code_identity", return_value="different-code"
-        ):
+        with patch("opennpu_quant.runner.code_identity", return_value="different-code"):
             with self.assertRaises(ValueError) as caught:
                 run(config, paths)
         message = str(caught.exception)

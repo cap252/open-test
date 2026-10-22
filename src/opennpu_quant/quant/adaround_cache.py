@@ -50,6 +50,8 @@ class LayerActivationCache:
             device_windows=0,
             device_fallback_windows=0,
             device_upload_bytes=0,
+            device_cache_reclaims=0,
+            device_reclaimed_bytes=0,
         )
 
     def get(self, key):
@@ -83,10 +85,24 @@ class LayerActivationCache:
             device != "cuda"
             or not self.config.device_bytes
             or size > self.config.device_bytes
-            or size + self.config.device_reserve_bytes > torch.cuda.mem_get_info()[0]
         ):
             self.metrics["device_fallback_windows"] += 1
             return items
+        free = torch.cuda.mem_get_info()[0]
+        required = size + self.config.device_reserve_bytes
+        if required > free:
+            reclaimable = max(
+                0, torch.cuda.memory_reserved() - torch.cuda.memory_allocated()
+            )
+            if free + reclaimable >= required:
+                torch.cuda.empty_cache()
+                after = torch.cuda.mem_get_info()[0]
+                self.metrics["device_cache_reclaims"] += 1
+                self.metrics["device_reclaimed_bytes"] += max(0, after - free)
+                free = after
+            if required > free:
+                self.metrics["device_fallback_windows"] += 1
+                return items
         converted = []
         try:
             for x, y in items:

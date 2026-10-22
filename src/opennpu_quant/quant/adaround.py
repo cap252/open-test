@@ -1,3 +1,9 @@
+"""Fixed-encoding AdaRound: re-learn INT8 weight rounding codes layer by layer.
+
+Scales, zero points, biases and graph connections stay as the RTN result made them;
+only the INT8 codes of Conv/Gemm/MatMul weights change. See docs/quantization.md.
+"""
+
 from contextlib import contextmanager, nullcontext
 from dataclasses import replace, asdict
 from pathlib import Path
@@ -67,6 +73,10 @@ def _constant(name, values, producers):
 
 
 def _targets(original, quantized, audit):
+    """One row per quantized weight: FP32 source node, QDQ student node, codes, bias.
+
+    The codes must still be the RTN codes clip(rint(w / s), -128, 127).
+    """
     values = _initializer_values(quantized)
     source_values = _initializer_values(original)
     producers = {name: n for n in quantized.graph.node for name in n.output}
@@ -125,12 +135,17 @@ def _targets(original, quantized, audit):
             raise ValueError(
                 "Input must be the original RTN codes, not a previously optimized model"
             )
+        # An omitted optional bias may be written as an empty input name.
         bias = (
             _constant(student.input[2], values, producers)
-            if len(student.input) > 2
+            if len(student.input) > 2 and student.input[2]
             else None
         )
-        source_bias = source_values[source.input[2]] if len(source.input) > 2 else None
+        source_bias = (
+            source_values[source.input[2]]
+            if len(source.input) > 2 and source.input[2]
+            else None
+        )
         rows.append(
             dict(
                 index=index,
@@ -227,6 +242,7 @@ class _Replay:
     def __init__(self, factory, signatures):
         self.factory, self.signatures = factory, signatures
         self.iterator, self.index = iter(factory()), 0
+        self.pending = None
 
     def next(self):
         if self.index == len(self.signatures):
@@ -234,13 +250,21 @@ class _Replay:
                 raise ValueError("Reconstruction replay added samples")
             self.iterator, self.index = iter(self.factory()), 0
         try:
-            value = next(self.iterator)
+            value = next(self.iterator) if self.pending is None else self.pending
+            self.pending = None
         except StopIteration:
             raise ValueError("Reconstruction replay lost samples") from None
         if feed_digest(value) != self.signatures[self.index]:
             raise ValueError("Reconstruction replay changed ordered samples")
         self.index += 1
         return value
+
+    def unread(self, value):
+        """Retry the same input next window without retaining activation tensors."""
+        if self.pending is not None or self.index < 1:
+            raise RuntimeError("Invalid reconstruction pushback")
+        self.index -= 1
+        self.pending = value
 
 
 @contextmanager
@@ -362,17 +386,22 @@ def _backward_regularizer(
 def _assert_parity(actual, expected, config, label):
     if (
         actual.shape != expected.shape
+        or actual.dtype != expected.dtype
         or not np.isfinite(actual).all()
-        or not np.allclose(actual, expected, atol=config.atol, rtol=config.rtol)
+        or not np.isfinite(expected).all()
     ):
-        maximum = (
-            float(np.max(np.abs(actual - expected)))
-            if actual.shape == expected.shape
-            else None
-        )
+        raise ValueError(f"Torch/ORT {label} structural parity failed")
+    if np.allclose(actual, expected, atol=config.atol, rtol=config.rtol):
+        return None
+    maximum = float(
+        np.abs(actual.astype(np.float64) - expected.astype(np.float64)).max(initial=0)
+    )
+    evidence = dict(label=label, max_abs=maximum, atol=config.atol, rtol=config.rtol)
+    if config.validation == "strict":
         raise ValueError(
             f"Torch/ORT {label} parity failed (max_abs={maximum}, atol={config.atol}, rtol={config.rtol})"
         )
+    return evidence
 
 
 def _fit_layer(
@@ -389,6 +418,11 @@ def _fit_layer(
     cache_config=None,
     profiling=None,
 ):
+    """Optimize one layer's rounding codes and return the hard codes with diagnostics.
+
+    The student input comes from the partially optimized QDQ model and the target from
+    the FP32 teacher; Adam trains rounding logits (rectified sigmoid) on sample windows.
+    """
     import torch
     from .adaround_cache import LayerActivationCache
 
@@ -423,6 +457,7 @@ def _fit_layer(
     )
     replay = _Replay(factory, signatures)
     parity_count = 0
+    parity_mismatches = []
     peak_bytes = 0
     indices_seen = set()
 
@@ -433,8 +468,8 @@ def _fit_layer(
         # These constants are needed only for the window's parity checks.
         original_weight = torch.tensor(row["weight"], device=device)
         rtn_weight = torch.tensor(row["rtn"].astype(np.float32), device=device) * scale
-        # No pending activation buffers survive a window. Stop before the configured
-        # cap using the largest previous pair (static model inputs in this contract).
+        # Use the largest observed pair as an estimate. A larger dynamic sample
+        # that does not fit is replayed next window, without retaining activations.
         max_pair = 0
         for _ in range(min(config.window_samples, len(signatures))):
             if items and used + max_pair > config.window_bytes:
@@ -446,8 +481,13 @@ def _fit_layer(
                 x, y = cached
                 pair = x.nbytes + y.nbytes
                 max_pair = max(max_pair, pair)
-                if pair > config.window_bytes or used + pair > config.window_bytes:
-                    raise MemoryError("Activation window exceeds its byte budget")
+                if pair > config.window_bytes:
+                    raise MemoryError(
+                        f"Activation pair {pair} exceeds window budget {config.window_bytes}"
+                    )
+                if used + pair > config.window_bytes:
+                    replay.unread(feed)
+                    break
                 indices_seen.add(key)
                 items.append(cached)
                 used += pair
@@ -473,8 +513,14 @@ def _fit_layer(
                 )
             pair = x.nbytes + y.nbytes
             max_pair = max(max_pair, pair)
-            if pair > config.window_bytes or used + pair > config.window_bytes:
-                raise MemoryError("Activation window exceeds its byte budget")
+            if pair > config.window_bytes:
+                raise MemoryError(
+                    f"Activation pair {pair} exceeds window budget {config.window_bytes}"
+                )
+            if used + pair > config.window_bytes:
+                replay.unread(feed)
+                del x, y, tx, sy
+                break
             with torch.no_grad():
                 predicted = (
                     operation(student, torch.tensor(x, device=device), rtn_weight, bias)
@@ -491,8 +537,13 @@ def _fit_layer(
                     .cpu()
                     .numpy()
                 )
-            _assert_parity(predicted, sy, config, "RTN " + source.name)
-            _assert_parity(reference, y, config, "FP32 " + source.name)
+            for actual, expected, label in (
+                (predicted, sy, "RTN "),
+                (reference, y, "FP32 "),
+            ):
+                mismatch = _assert_parity(actual, expected, config, label + source.name)
+                if mismatch is not None:
+                    parity_mismatches.append(dict(sample=parity_count, **mismatch))
             parity_count += 1
             indices_seen.add(replay.index - 1)
             pair_arrays = (np.array(x, copy=True), np.array(y, copy=True))
@@ -580,6 +631,8 @@ def _fit_layer(
         error_samples=len(items),
         reconstruction_samples_seen=len(indices_seen),
         parity_samples=parity_count,
+        parity_passed=not parity_mismatches,
+        parity_mismatches=parity_mismatches,
         peak_activation_window_bytes=peak_bytes,
         gradient_parameters=["alpha"],
         regularizer_chunked=alpha.numel() > REGULARIZER_CHUNK_THRESHOLD,
@@ -628,16 +681,16 @@ def apply_adaround(
     checkpoint_dir=None,
     activation_cache=None,
 ):
-    """Public, single-writer fixed-encoding weight rounding API."""
+    """Implementation behind opennpu_quant.apply_adaround (single writer per checkpoint)."""
     from opennpu_quant._locking import RunLock
 
-    if quantized_result.config.weight_granularity == "per_group":
-        raise ValueError("Per-group AdaRound is not supported; use PC AdaRound")
     import torch
 
     cuda = config.device == "cuda" or (
         config.device == "auto" and "CUDAExecutionProvider" in ort.providers
     )
+    if cuda and not torch.cuda.is_available():
+        raise RuntimeError("CUDA AdaRound requested but CUDA Torch is unavailable")
     index = next(
         (
             int(dict(ort.provider_options[i]).get("device_id", 0))
@@ -706,8 +759,6 @@ def _apply_adaround(
     device = config.device
     if device == "auto":
         device = "cuda" if "CUDAExecutionProvider" in ort.providers else "cpu"
-    if device == "cuda" and not torch.cuda.is_available():
-        raise RuntimeError("CUDA AdaRound requested but CUDA Torch is unavailable")
     mutable = {row["codes_name"] for row in rows}
     frozen = frozen_identity(model, mutable)
     execution = environment(ort)
@@ -860,6 +911,7 @@ def _apply_adaround(
                 status(row, 0, "interrupted_or_failed")
                 raise
     audit = copy.deepcopy(quantized_result.audit)
+    initializer_names = {tensor.name for tensor in original.graph.initializer}
     audit["adaround"] = dict(
         config=config.to_dict(),
         identity=identity,
@@ -875,7 +927,7 @@ def _apply_adaround(
         dynamic_matmul=[
             dict(node=i, name=n.name, reason="no constant weight")
             for i, n in enumerate(original.graph.node)
-            if n.op_type == "MatMul" and n.input[1] not in _initializer_values(original)
+            if n.op_type == "MatMul" and n.input[1] not in initializer_names
         ],
         scale_selection_audit="unchanged RTN scale-selection evidence; weight MSE candidates precede AdaRound",
     )

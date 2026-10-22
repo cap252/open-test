@@ -39,8 +39,12 @@ class Paths:
         if not isinstance(config, dict):
             raise ValueError(f"Local path settings in {path} must be a mapping")
         allowed = {"home", "models", "data", "cache", "runs", "weights", "datasets"}
-        if set(config) - allowed:
-            raise ValueError("Unknown local path setting")
+        unknown = set(config) - allowed
+        if unknown:
+            raise ValueError(
+                f"Unknown local path setting(s) in {path}: "
+                f"{', '.join(sorted(map(str, unknown)))}; allowed: {', '.join(sorted(allowed))}"
+            )
 
         def path_setting(value, key):
             if not isinstance(value, str) or not value.strip() or "\0" in value:

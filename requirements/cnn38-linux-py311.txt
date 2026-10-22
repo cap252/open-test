@@ -1,0 +1,15 @@
+# Add to the existing CPU or CUDA Python 3.11 environment: extended-model export
+# dependencies. Base setup already includes LFW alignment. MMSeg uses cnn38-mmseg.txt.
+numpy==1.26.4
+opencv-python==4.11.0.86
+timm==1.0.15
+safetensors==0.8.0
+ultralytics==8.3.0
+yacs==0.1.8
+pytorch-lightning==1.9.5
+torchmetrics==0.11.4
+loguru==0.7.3
+tabulate==0.9.0
+einops==0.8.1
+alfred-py==3.1.1
+scikit-image==0.25.2

@@ -1,15 +1,11 @@
 import contextlib
-import copy
-import importlib.util
 import io
-import json
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import numpy as np
 import onnx
@@ -21,7 +17,7 @@ from opennpu_quant import (
     OrtConfig,
 )
 from opennpu_quant.evaluation.segmentation import _ConfusionMatrix
-from opennpu_quant.evaluation.metrics import DecodedEvaluator, SegmentationEvaluator
+from opennpu_quant.evaluation.metrics import SegmentationEvaluator
 from opennpu_quant.quant.histograms import FixedHistograms
 from opennpu_quant.quant.ranges import select_ranges
 
@@ -83,7 +79,7 @@ class SegmentationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ignored.finalize()
 
-    def test_decoded_evaluation_details_and_snapshot_isolation(self):
+    def test_evaluation_details_are_a_snapshot(self):
         from opennpu_quant.evaluation.loop import evaluate
 
         h = onnx.helper
@@ -97,37 +93,24 @@ class SegmentationTests(unittest.TestCase):
             opset_imports=[h.make_opsetid("", 17)],
             ir_version=10,
         )
-        seen = []
-
-        def decode(outputs, metadata):
-            seen.append(metadata["coordinate_policy"])
-            return {"labels": outputs["y"].argmax(1)[0]}
-
-        metric = SegmentationEvaluator(output_name="labels", classes=3)
-        evaluator = DecodedEvaluator(decode, metric)
+        metric = SegmentationEvaluator(output_name="y", classes=3)
         logits = np.array(
             [[[[2, 2], [1, 0]], [[0, 0], [1, 2]], [[0, 0], [1, 0]]]], np.float32
         )
-        sample = EvaluationSample(
-            "a", {"x": logits}, self.sample().target, {"coordinate_policy": "restored"}
-        )
+        sample = EvaluationSample("a", {"x": logits}, self.sample().target)
         result = evaluate(
             model,
             [sample],
-            evaluator=evaluator,
+            evaluator=metric,
             ort=OrtConfig.cpu(profile_samples=0),
             expected_samples=1,
         )
-        self.assertEqual(["restored"], seen)
         self.assertEqual({"mIoU": 0.5}, result.metrics)
         self.assertTrue(result.complete)
         self.assertEqual(2 / 3, result.metric_details["pixel_accuracy"])
         self.assertEqual({"mIoU": "fraction"}, result.metric_units)
         metric.metric_details["per_class_iou"][0] = 123
         self.assertEqual(0.5, result.metric_details["per_class_iou"][0])
-        evaluator.reset()
-        self.assertEqual({}, evaluator.metric_details)
-        self.assertIsNone(evaluator.prediction)
 
     def test_model_adapter_forwards_segmentation_details(self):
         from opennpu_quant.models.adapter import ModelEvaluator
@@ -203,52 +186,35 @@ class RangeTests(unittest.TestCase):
 
 
 class InterfaceTests(unittest.TestCase):
-    def test_optional_recipe_metadata_and_boundary_validation(self):
+    def test_recipes_load_and_legacy_top_level_keys_are_rejected(self):
         from opennpu_quant.models.spec import ModelSpec, model_names
 
         for name in model_names():
-            recipe = ModelSpec.load(name).recipe
-            self.assertNotIn("outputs", recipe)
-            self.assertNotIn("network_outputs", recipe)
-            old = copy.deepcopy(recipe)
-            if "split" in old["export"]:
-                old["network_outputs"] = list(old["export"]["split"]["network_outputs"])
-            elif old["task"] == "classification":
-                old["outputs"] = {"logits": [1, 1000]}
-            before = copy.deepcopy(old)
-            with tempfile.TemporaryDirectory() as d:
+            ModelSpec.load(name)
+        recipe = ModelSpec.load("resnet18").recipe
+        for key in ("outputs", "network_outputs", "metric_params"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as d:
                 path = Path(d) / "recipe.yaml"
-                path.write_text(yaml.safe_dump(old))
-                self.assertEqual(old, ModelSpec.load(path).recipe)
-            self.assertEqual(before, old)
-        old = copy.deepcopy(ModelSpec.load("yolov5s").recipe)
-        old["network_outputs"] = list(
-            reversed(old["export"]["split"]["network_outputs"])
-        )
-        with self.assertRaisesRegex(ValueError, "Conflicting"):
-            ModelSpec(old)
-        ssd = copy.deepcopy(ModelSpec.load("ssd_mobilenet_v2_320").recipe)
-        ssd["network_outputs"] = ["old_exporter_suffix"]
-        self.assertEqual(ssd, ModelSpec(ssd).recipe)
+                path.write_text(yaml.safe_dump(dict(recipe, **{key: {}})))
+                with self.assertRaisesRegex(ValueError, "Unknown setting.*" + key):
+                    ModelSpec.load(path)
 
-    def test_cli_export_check_is_hidden_but_accepted(self):
+    def test_removed_cli_options_are_rejected_and_version_matches(self):
         from opennpu_quant.cli import main
 
-        with (
-            contextlib.redirect_stdout(io.StringIO()) as out,
-            self.assertRaises(SystemExit) as done,
+        for args in (
+            ["export", "resnet18", "--check"],
+            ["report", "run", "--view", "full"],
+            ["compare", "catalog.json"],
+            ["fetch", "models"],
         ):
-            main(["export", "--help"])
-        self.assertEqual(0, done.exception.code)
-        self.assertNotIn("--check", out.getvalue())
-        with (
-            tempfile.TemporaryDirectory() as d,
-            patch("opennpu_quant.export.launcher.export", return_value={}) as export,
-        ):
-            for extra in ([], ["--check"]):
-                with contextlib.redirect_stdout(io.StringIO()):
-                    main(["export", "resnet18", "--home", d, *extra])
-            self.assertEqual(export.call_args_list[0], export.call_args_list[1])
+            with (
+                self.subTest(args=args),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit) as done,
+            ):
+                main(args)
+            self.assertEqual(2, done.exception.code)
         version = subprocess.check_output(
             [sys.executable, "-B", "-m", "opennpu_quant", "--version"], text=True
         ).strip()
@@ -261,51 +227,3 @@ class InterfaceTests(unittest.TestCase):
             (Path(__file__).parents[1] / "pyproject.toml").read_text()
         )
         self.assertEqual(metadata["project"]["version"], __version__)
-
-    @unittest.skipUnless(
-        importlib.util.find_spec("pycocotools"), "Optional COCO dependency"
-    )
-    def test_keypoints_remains_available_without_a_packaged_pose_adapter(self):
-        from opennpu_quant.evaluation.coco import CocoMetric
-
-        points = [v for i in range(17) for v in (20 + i, 20 + i, 2)]
-        annotations = dict(
-            info={},
-            images=[dict(id=1, width=100, height=100)],
-            categories=[
-                dict(
-                    id=1,
-                    name="person",
-                    keypoints=[str(i) for i in range(17)],
-                    skeleton=[],
-                )
-            ],
-            annotations=[
-                dict(
-                    id=1,
-                    image_id=1,
-                    category_id=1,
-                    bbox=[10, 10, 80, 80],
-                    area=6400,
-                    iscrowd=0,
-                    keypoints=points,
-                    num_keypoints=17,
-                )
-            ],
-        )
-        with (
-            tempfile.TemporaryDirectory() as d,
-            contextlib.redirect_stdout(io.StringIO()),
-        ):
-            path = Path(d) / "person.json"
-            path.write_text(json.dumps(annotations))
-            metric = CocoMetric(path, iou_type="keypoints")
-            wrapped = DecodedEvaluator(lambda outputs, meta: outputs["points"], metric)
-            sample = EvaluationSample("1", {}, None)
-            wrapped.update(
-                {"points": [dict(category_id=1, keypoints=points, score=1.0)]}, sample
-            )
-            self.assertAlmostEqual(1.0, wrapped.finalize()["AP"])
-            wrapped.reset()
-            wrapped.update({"points": []}, sample)
-            self.assertEqual(0.0, wrapped.finalize()["AP"])

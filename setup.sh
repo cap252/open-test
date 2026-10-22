@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-device=cpu
+device=cuda
 with_data=0
 while (($#)); do
   case "$1" in
     --device) device="$2"; shift 2 ;;
     --data) with_data=1; shift ;;
-    --help|-h) echo 'Usage: ./setup.sh [--device cpu|cuda] [--data]'; exit 0 ;;
+    --help|-h) echo 'Usage: ./setup.sh [--device cuda|cpu] [--data] (default: cuda)'; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -47,4 +47,6 @@ if [[ "$with_data" == 1 ]]; then
 fi
 "$uv_bin" pip check --python "$root/.venv/bin/python"
 echo "Ready: source $root/.venv/bin/activate"
-echo 'Then: opennpu-quant demo --adaround'
+demo_device=cpu
+[[ "$device" == cpu ]] || demo_device=cuda:0
+echo "Then: opennpu-quant demo --device $demo_device --adaround"

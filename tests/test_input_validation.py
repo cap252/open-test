@@ -4,6 +4,8 @@ import contextlib
 import copy
 import io
 import json
+from tests.library_fixtures import small_config
+
 from pathlib import Path
 import subprocess
 import sys
@@ -51,7 +53,7 @@ class InputValidationTests(unittest.TestCase):
             {"adaround": False},
             {"scheme": "pot", "adaround": True},
         ):
-            config = load_config("quick")
+            config = small_config()
             config["conditions"]["fp32"] = row
             with self.subTest(row=row):
                 self.assert_error(
@@ -63,7 +65,7 @@ class InputValidationTests(unittest.TestCase):
     def test_runner_rejects_quantized_fp32_before_creating_run(self):
         from opennpu_quant.runner import run
 
-        config = load_config("quick")
+        config = small_config()
         config["conditions"]["fp32"] = {"scheme": "pot"}
         paths = Paths.resolve(home=self.root)
         with patch("opennpu_quant.runner._run_model") as execute:
@@ -73,7 +75,7 @@ class InputValidationTests(unittest.TestCase):
         self.assertFalse(paths.runs.exists())
 
     def test_missing_fp32_in_explicit_selection_is_actionable(self):
-        config = load_config("quick")
+        config = small_config()
         del config["conditions"]["fp32"]
         path = self.config_file(config)
         self.assert_error(
@@ -90,8 +92,6 @@ class InputValidationTests(unittest.TestCase):
             "runtime.intra_op_threads": [-1, 1.5, True, "1"],
             "runtime.inter_op_threads": [-1, False],
             "runtime.cuda.gpu_mem_limit": [0, -1, 1.5, True],
-            "runtime.cuda.use_tf32": ["false", 0],
-            "runtime.cuda.cudnn_conv_use_max_workspace": ["false"],
             "evaluation.limit": [0, -1, 1.5, True, "all"],
             "calibration.histogram_bins": [0, 32, -1, 1.5, True],
             "schemes.pot.activation_symmetric": ["false", 0],
@@ -117,7 +117,7 @@ class InputValidationTests(unittest.TestCase):
         for path, values in cases.items():
             for value in values:
                 with self.subTest(path=path, value=value):
-                    config = load_config("quick")
+                    config = small_config()
                     node = config
                     *parents, key = path.split(".")
                     for parent in parents:
@@ -142,7 +142,7 @@ class InputValidationTests(unittest.TestCase):
                     self.assertNotIn("Traceback", stderr.getvalue())
 
     def test_required_packaged_dataset_samples_are_checked(self):
-        config = load_config("quick")
+        config = small_config()
         del config["calibration"]["samples"]["imagenet"]
         self.assert_error(
             self.invoke("run", "-c", self.config_file(config), "--dry-run"),
@@ -152,13 +152,14 @@ class InputValidationTests(unittest.TestCase):
     def test_required_local_dataset_samples_are_checked(self):
         from opennpu_quant.models.spec import ModelSpec
 
-        config = load_config("quick")
+        config = small_config()
         config["models"] = ["local_toy"]
         config["percentiles"]["local_toy"] = config["percentiles"]["resnet18"]
         folder = self.root / "models/local_toy"
         folder.mkdir(parents=True)
         recipe = copy.deepcopy(ModelSpec.load("resnet18").recipe)
         recipe.update(name="local_toy", dataset="custom_data")
+        recipe["decode"]["profile"] = "current_v1"
         (folder / "recipe.yaml").write_text(yaml.safe_dump(recipe))
         path = self.config_file(config)
         self.assert_error(
@@ -174,7 +175,7 @@ class InputValidationTests(unittest.TestCase):
     def test_local_recipe_can_override_a_packaged_models_dataset(self):
         from opennpu_quant.models.spec import ModelSpec
 
-        config = load_config("quick")
+        config = small_config()
         config["models"] = ["resnet18"]
         config["calibration"]["samples"] = {"custom_data": 2}
         folder = self.root / "models/resnet18"
@@ -188,7 +189,7 @@ class InputValidationTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
 
     def test_valid_zero_threads_unlimited_evaluation_and_false_flags(self):
-        config = load_config("quick")
+        config = small_config()
         config["runtime"].update(intra_op_threads=0, inter_op_threads=0)
         config["evaluation"]["limit"] = None
         config["output"].update(save_predictions=False, save_qdq_models=False)
@@ -224,16 +225,6 @@ class InputValidationTests(unittest.TestCase):
             "line",
             "column",
         )
-
-    def test_existing_comparison_output_is_preserved_and_actionable(self):
-        directory = self.root / "snapshot"
-        directory.mkdir()
-        marker = directory / "keep.txt"
-        marker.write_text("prior snapshot")
-        result = self.invoke("compare", "catalog.json", "--output", directory)
-        self.assert_error(result, "output", "new")
-        self.assertEqual("prior snapshot", marker.read_text())
-        self.assertEqual([marker], list(directory.iterdir()))
 
     def test_expected_filesystem_errors_do_not_mask_programming_errors(self):
         for failure, words in (
@@ -356,8 +347,6 @@ class BaselineRecordValidationTests(unittest.TestCase):
                     str(path),
                     "--stdout",
                     "csv",
-                    "--view",
-                    "full",
                 ],
                 capture_output=True,
                 text=True,
@@ -371,6 +360,92 @@ class BaselineRecordValidationTests(unittest.TestCase):
             for row in tables(json.loads(before)["records"])[0]:
                 self.assertEqual("mismatch", row["pairing_status"])
             self.assertEqual(before, path.read_bytes())
+
+
+class ErrorMessageTests(unittest.TestCase):
+    """Errors name the offending file, key or value and the valid alternatives."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+
+    def test_missing_experiment_file_lists_the_presets(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "not found: missing.yaml.*core10, cnn30",
+        ):
+            load_config("missing.yaml")
+
+    def test_unknown_model_lists_the_packaged_models(self):
+        from opennpu_quant.models.spec import ModelSpec
+
+        with self.assertRaisesRegex(ValueError, "Unknown model: resnet19.*resnet18"):
+            ModelSpec.load("resnet19")
+
+    def test_recipe_key_errors_name_the_keys(self):
+        from opennpu_quant.models.spec import ModelSpec
+
+        recipe = copy.deepcopy(ModelSpec.load("resnet18").recipe)
+        recipe["metrics"] = recipe.pop("metric")
+        path = self.root / "recipe.yaml"
+        path.write_text(yaml.safe_dump(recipe))
+        with self.assertRaisesRegex(
+            ValueError, r"missing \['metric'\], unknown \['metrics'\]"
+        ):
+            ModelSpec.load(path)
+
+    def test_invalid_json_names_the_file(self):
+        from opennpu_quant._io import read_json
+
+        path = self.root / "records.json"
+        path.write_text("name: not json\n")
+        with self.assertRaisesRegex(ValueError, "Invalid JSON in .*records.json"):
+            read_json(path)
+
+    def test_unknown_local_path_setting_is_named(self):
+        local = self.root / "local.yaml"
+        local.write_text("home: x\nmodel: y\n")
+        with self.assertRaisesRegex(
+            ValueError, r"setting\(s\) in .*local.yaml: model;"
+        ):
+            Paths.resolve(local=local)
+
+    def test_removed_fixed_settings_are_reported_as_unknown(self):
+        for path, value in (
+            ("runtime.cuda.use_tf32", False),
+            ("evaluation.split", "validation"),
+            ("adaround.data", "calibration"),
+            ("calibration.source", "compute"),
+        ):
+            config = small_config()
+            *parents, key = path.split(".")
+            node = config
+            for parent in parents:
+                node = node[parent]
+            node[key] = value
+            with self.subTest(path=path):
+                with self.assertRaisesRegex(ValueError, "Unknown setting.*" + path):
+                    validate(config)
+
+    def test_invalid_condition_scheme_lists_the_families(self):
+        config = small_config()
+        config["conditions"]["pot_rtn"]["scheme"] = "pots"
+        with self.assertRaisesRegex(ValueError, "scheme families: pot, float"):
+            validate(config)
+
+    def test_export_takes_packaged_names_and_reports_exporter_failures(self):
+        from opennpu_quant.export.launcher import export
+
+        local = self.root / "local.yaml"
+        local.write_text("{}\n")
+        paths = Paths.resolve(home=self.root, local=local)
+        with self.assertRaisesRegex(ValueError, "Unknown model: recipe.yaml"):
+            export("recipe.yaml", paths)
+        failure = subprocess.CalledProcessError(3, ["python"])
+        with patch("opennpu_quant.export.launcher.subprocess.run", side_effect=failure):
+            with self.assertRaisesRegex(RuntimeError, "exit code 3"):
+                export("resnet18", paths)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,48 @@
+name: squeezenet1_1
+title: SqueezeNet 1.1
+task: classification
+dataset: imagenet
+metric: top1
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - 224
+  - 224
+  layout: NCHW
+graphs:
+  network: network.onnx
+preprocess:
+  kind: center_crop
+  resize: 256
+  crop: 224
+  interpolation: bilinear
+  mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  std:
+  - 0.229
+  - 0.224
+  - 0.225
+decode:
+  profile: numpy_argsort_v1
+  kind: logits
+  output: logits
+source:
+  url: https://download.pytorch.org/models/squeezenet1_1-b8a52dc0.pth
+  sha256: b8a52dc049b60e4b6ab68ad0df457362afab8b6304b2febdc1650a5dab4d7e7b
+  variant: squeezenet1_1
+  code_revision: 3ac97aa9120137381ed1060f37237e44485ac2aa
+  builder: squeezenet1_1
+  weights: IMAGENET1K_V1
+  package:
+    name: torchvision
+    version: 0.20.1
+export:
+  family: torchvision
+  opset: 18
+  simplify: true
+  framework_parity:
+    logits_absolute_bound: 0.0001

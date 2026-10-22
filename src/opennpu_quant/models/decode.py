@@ -1,3 +1,8 @@
+"""Turn raw network outputs into detections or label maps in original-image coordinates.
+
+OpenCV is imported inside the functions that need it, so classification needs no cv2.
+"""
+
 import itertools
 import math
 import numpy as np
@@ -87,11 +92,10 @@ def segmentation_labels(logits, valid_size, original_size):
     return resized.argmax(axis=2).astype(np.uint8)
 
 
-import cv2
-
-
 def class_nms(boxes, scores, labels, threshold, max_det):
     """Class-aware greedy NMS; no class offsets that assume bounded coordinates."""
+    import cv2
+
     kept = []
     for label in np.unique(labels):
         idx = np.flatnonzero(labels == label)
@@ -139,4 +143,31 @@ def yolo(predictions, metadata, category_ids, policy):
         dict(category_id=category_ids[int(label)], bbox=b.tolist(), score=float(score))
         for b, label, score in zip(boxes, labels, confidence)
         if b[2] > 0 and b[3] > 0
+    ]
+
+
+def tf_od_api(outputs, settings, original_size, category_ids):
+    """TensorFlow Object Detection API outputs -> COCO rows (xywh in original pixels)."""
+    count = int(outputs[settings["count"]][0])
+    width, height = original_size
+    if not 0 <= count <= outputs[settings["boxes"]].shape[1]:
+        raise ValueError("Invalid SSD detection count")
+    # The API emits normalized [ymin, xmin, ymax, xmax]; reorder to xyxy and scale.
+    boxes = outputs[settings["boxes"]][0, :count][:, [1, 0, 3, 2]].copy() * np.array(
+        [width, height, width, height]
+    )
+    scores = outputs[settings["scores"]][0, :count]
+    raw = outputs[settings["classes"]][0, :count]
+    if not np.array_equal(raw, raw.astype(int)):
+        raise ValueError("Noninteger SSD class")
+    labels = raw.astype(int)
+    if not set(labels.tolist()) <= set(category_ids):
+        raise ValueError("Invalid sparse COCO category ID")
+    boxes[:, [0, 2]] = boxes[:, [0, 2]].clip(0, width)
+    boxes[:, [1, 3]] = boxes[:, [1, 3]].clip(0, height)
+    boxes[:, 2:] -= boxes[:, :2]
+    return [
+        dict(category_id=int(label), bbox=box.tolist(), score=float(score))
+        for box, score, label in zip(boxes, scores, labels)
+        if box[2] > 0 and box[3] > 0
     ]

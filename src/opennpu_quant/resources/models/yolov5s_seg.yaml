@@ -1,0 +1,50 @@
+name: yolov5s_seg
+title: YOLOv5s-seg
+task: instance_segmentation
+dataset: coco
+metric: mask_AP
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - height
+  - width
+  layout: NCHW
+graphs:
+  network: network.onnx
+  postprocess: postprocess.onnx
+preprocess:
+  kind: letterbox_dynamic
+  size: 640
+  pad_value: 114
+  stride: 32
+  rectangular: true
+decode:
+  profile: historical_cnn33_v1
+  kind: yolo_seg
+  output: predictions
+  confidence_threshold: 0.001
+  multi_label: true
+  max_nms_candidates: 30000
+  nms:
+    iou: 0.6
+  max_detections: 300
+source:
+  url: https://github.com/ultralytics/yolov5/releases/download/v7.0/yolov5s-seg.pt
+  sha256: 78558867515e9d9654c52ed87c40c22d90a983bea63450c611cbd8c2b13e3aa2
+  repo: https://github.com/ultralytics/yolov5
+  commit: 915bbf294bb74c859f0b41f1c23bc395014ea679
+  variant: v7.0-s-seg-640
+  file: checkpoint.pt
+  archive_sha256: 5aac5c8c40f89831fee611621b5ef3dbd7a7633278713b4dd0d059e1a631c7b0
+export:
+  family: yolov5_seg
+  opset: 17
+  simplify: false
+  dynamic_spatial: true
+  fixture_size: 640
+  outputs:
+  - predictions
+  - prototypes
+  split_detector: true

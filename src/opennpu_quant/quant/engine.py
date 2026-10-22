@@ -1,6 +1,10 @@
-"""Preserve protected activation edges when inserting Q/DQ.
+"""Build the INT8 QDQ graph from selected activation ranges (the core of quantize()).
 
-Shared internal tensors receive Q/DQ only on their external consumer paths.
+layout() decides which tensors get Q/DQ: operator input roles below, minus the internal
+edges of recognized activation patterns (graph/activations.py), which are protected.
+quantize_model() then inserts activation Q/DQ, encodes weights (INT8) and biases (INT32),
+reassembles the graph and verifies the result. Shared internal tensors receive Q/DQ only
+on their external consumer paths. See docs/quantization.md.
 """
 
 import copy
@@ -68,6 +72,8 @@ FIRST = {
     "Softmax",
     "LogSoftmax",
     # shape and indexing operators that move feature data
+    "DepthToSpace",
+    "SpaceToDepth",
     "Flatten",
     "Reshape",
     "Resize",
@@ -330,16 +336,14 @@ def quantize_model(source, ranges, scheme, protection=None):
     The emitted bytes are deterministic: names, node order and initializer order are fixed.
     """
     activation_policy, weight_policy = scale_policies(scheme)
-    scale_audit = None
-    if (activation_policy, weight_policy) != ("float", "float"):
-        scale_audit = dict(
-            activation_scale_policy=activation_policy,
-            weight_scale_policy=weight_policy,
-            activations=[],
-            weights=[],
-            biases=[],
-            bias_adjusted_channels=0,
-        )
+    scale_audit = dict(
+        activation_scale_policy=activation_policy,
+        weight_scale_policy=weight_policy,
+        activations=[],
+        weights=[],
+        biases=[],
+        bias_adjusted_channels=0,
+    )
     model = infer_model(source)
     original = copy.deepcopy(model)
     plan = layout(model, scheme["scope"], protection)
@@ -515,7 +519,9 @@ def _quantize_weights_and_biases(
         if weight_name not in float_initializers:
             if node.op_type != "MatMul":
                 raise ValueError("Initializer weight required: " + node.name)
-            continue  # dynamic MatMul: both operands are activations, handled in phase 1
+            # Not an initializer: a dynamic MatMul (activations, handled in phase 1) or a
+            # constant weight that is not an initializer, which stays FP32.
+            continue
         weight = float_initializers[weight_name]
         attributes = {
             attribute.name: helper.get_attribute_value(attribute)
@@ -958,7 +964,17 @@ def audit_runtime(source, executed, quantization):
             "Runtime audit requires parameter identity; regenerate the QDQ audit"
         )
     original = onnx.load(source)
-    runtime = onnx.load(executed)
+    from pathlib import Path
+    from onnx.external_data_helper import load_external_data_for_model
+    from ..graph.model import external_data_files
+
+    # ORT 1.20 keeps source-relative external locations when saving elsewhere.
+    runtime = onnx.load(executed, load_external_data=False)
+    referenced = external_data_files(executed)
+    if referenced:
+        if set(referenced) - set(external_data_files(source)):
+            raise ValueError("Runtime introduced an unknown external weight file")
+        load_external_data_for_model(runtime, str(Path(source).resolve().parent))
     ordinary_nodes = [
         node for node in original.graph.node if not node.name.startswith(QDQ_PREFIX)
     ]

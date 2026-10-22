@@ -1,0 +1,36 @@
+name: unet_resnet50_voc
+title: U-Net-ResNet50
+task: segmentation
+dataset: voc
+metric: mIoU
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - 512
+  - 512
+  layout: NCHW
+graphs:
+  network: network.onnx
+preprocess:
+  kind: unet_letterbox
+  size: 512
+decode:
+  kind: segmentation_resize
+  output: logits
+source:
+  url: https://github.com/bubbliiiing/unet-pytorch/releases/download/v1.0/unet_resnet_voc.pth
+  sha256: 556a74b8379c40cbc76af7a1faab84d1316f02b7d93290b5f1f724ff922faacb
+  repo: https://github.com/bubbliiiing/unet-pytorch
+  commit: 5bcd6b4c832648beed1b92e78ed1e85c56343eca
+  variant: unet_resnet_voc.pth
+  file: checkpoint.pt
+  archive_sha256: 6d0943f1f5d0abad8837b73fa46ae4eba0d6f5ae502d19fd288c4e3fffff6b94
+export:
+  family: unet
+  opset: 17
+  simplify: false
+  dynamic_spatial: false
+  outputs:
+  - logits

@@ -22,7 +22,7 @@ class PreprocessingReliabilityTests(unittest.TestCase):
             paths, _ = fixture(root)
             spec = ModelSpec.load(paths.models / "toy/recipe.yaml")
             spec.recipe["preprocess"] = dict(kind="custom_reliability:transform")
-            bundle = ModelBundle(spec, paths.models / "toy")
+            bundle = ModelBundle.from_directory(spec, paths.models / "toy")
             data = Dataset(paths.data / "imagenet/manifest.json")
             module = ModuleType("custom_reliability")
             module.np = np
@@ -57,7 +57,7 @@ class PreprocessingReliabilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             paths, _ = fixture(root)
-            bundle = ModelBundle(
+            bundle = ModelBundle.from_directory(
                 ModelSpec.load(paths.models / "toy/recipe.yaml"), paths.models / "toy"
             )
             data = Dataset(paths.data / "imagenet/manifest.json")
@@ -80,7 +80,7 @@ class PreprocessingReliabilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             paths, _ = fixture(root)
-            bundle = ModelBundle(
+            bundle = ModelBundle.from_directory(
                 ModelSpec.load(paths.models / "toy/recipe.yaml"), paths.models / "toy"
             )
             data = Dataset(paths.data / "imagenet/manifest.json")
@@ -93,3 +93,56 @@ class PreprocessingReliabilityTests(unittest.TestCase):
             bundle.spec.recipe["preprocess"]["mean"][0] += 1
             with self.assertRaisesRegex(ValueError, "settings/input mapping changed"):
                 list(cached())
+
+    def test_ort_code_change_invalidates_only_caches_with_a_cpu_graph(self):
+        from opennpu_quant.data import samples
+
+        real = samples.source_hashes
+
+        def changed(*paths):
+            return {**real(*paths), "ort/fetch.py": "changed"}
+
+        for host in (None, "preprocess"):
+            for shape in ([1, 3, 4, 4], [1, 3, "height", "width"]):
+                with self.subTest(host=host, shape=shape):
+                    with tempfile.TemporaryDirectory() as temp:
+                        root = Path(temp)
+                        paths, _ = fixture(root, host=host)
+                        bundle = ModelBundle.from_directory(
+                            ModelSpec.load(paths.models / "toy/recipe.yaml"),
+                            paths.models / "toy",
+                        )
+                        bundle.spec.recipe["input"]["shape"] = shape
+                        data = Dataset(paths.data / "imagenet/manifest.json")
+
+                        def cached():
+                            return data.cached_feeds(
+                                bundle, 2, root / "cache", max_bytes=100000
+                            )
+
+                        first = cached()
+                        kind = "Variable" if isinstance(shape[2], str) else ""
+                        self.assertEqual(kind + "FeedCache", type(first).__name__)
+                        direct = [feed_digest(f) for f in data.feeds(bundle, 2)()]
+                        self.assertEqual(direct, [feed_digest(f) for f in first()])
+                        with patch.object(samples, "source_hashes", changed):
+                            again = cached()
+                            if host:
+                                self.assertFalse(again.reused)
+                                self.assertNotEqual(
+                                    first.manifest["identity"],
+                                    again.manifest["identity"],
+                                )
+                                with self.assertRaisesRegex(
+                                    ValueError, "runtime code changed"
+                                ):
+                                    list(first())
+                            else:
+                                self.assertTrue(again.reused)
+                                self.assertEqual(
+                                    first.manifest["identity"],
+                                    again.manifest["identity"],
+                                )
+                                self.assertEqual(
+                                    direct, [feed_digest(f) for f in first()]
+                                )

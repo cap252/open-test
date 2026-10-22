@@ -1,7 +1,9 @@
+"""Checksum-verified downloads and safe archive extraction for model export."""
+
 from pathlib import Path
-import shutil, tarfile, zipfile, urllib.request, tempfile
-from ._io import read_yaml, sha256
-from ._locking import RunLock
+import shutil, tarfile, zipfile, urllib.request
+from .._io import sha256
+from .._locking import RunLock
 
 
 def download(url, destination, *, sha256_expected):
@@ -54,38 +56,3 @@ def extract_archive(archive, destination):
                 if not (member.isdir() or member.isfile()):
                     raise ValueError("Archive links/special files are not supported")
             t.extractall(destination, filter="data")
-
-
-def fetch_assets(kind, manifest_path, models, paths):
-    manifest = read_yaml(Path(manifest_path))
-    results = []
-    for name in models:
-        if "/" in name or ".." in name:
-            raise ValueError("Unsafe model name")
-        row = manifest[kind][name]
-        archive = download(
-            row["url"],
-            paths.cache
-            / "downloads"
-            / (kind + "_" + name + "_" + row["sha256"] + ".tar.gz"),
-            sha256_expected=row["sha256"],
-        )
-        destination = (
-            paths.models / name
-            if kind == "models"
-            else paths.cache / "calibration" / name / "reference"
-        )
-        with RunLock(destination.parent / (destination.name + ".fetch.lock")):
-            if destination.exists():
-                raise ValueError(
-                    "Asset destination already exists; verify or use a new workspace: "
-                    + str(destination)
-                )
-            with tempfile.TemporaryDirectory(
-                dir=destination.parent, prefix=".asset_"
-            ) as temp:
-                unpacked = Path(temp) / "unpacked"
-                extract_archive(archive, unpacked)
-                unpacked.replace(destination)
-        results.append(str(destination))
-    return results

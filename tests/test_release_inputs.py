@@ -8,12 +8,9 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
-import zipfile
 
 import yaml
 
-from opennpu_quant._io import sha256
-from opennpu_quant.fetch import fetch_assets
 from opennpu_quant.paths import Paths
 
 
@@ -41,37 +38,6 @@ class ReleaseInputTests(unittest.TestCase):
         self.assertNotIn("Traceback", result.stderr)
         for word in words:
             self.assertIn(word, result.stderr)
-
-    def test_fetch_yaml_error_names_file_and_location_before_writing(self):
-        manifest = self.root / "broken.yaml"
-        manifest.write_text("models: [broken\n", encoding="utf-8")
-        result = self.invoke(
-            "fetch", "models", "--manifest", manifest, "--models", "resnet18"
-        )
-        self.assert_input_error(result, str(manifest), "YAML", "line", "column")
-        self.assertFalse((self.root / "workspace").exists())
-
-    def test_valid_manifest_still_fetches_and_verifies_local_asset(self):
-        archive = self.root / "asset.zip"
-        with zipfile.ZipFile(archive, "w") as output:
-            output.writestr("payload.txt", "verified asset")
-        manifest = self.root / "assets.yaml"
-        manifest.write_text(
-            yaml.safe_dump(
-                {
-                    "models": {
-                        "toy": {"url": archive.as_uri(), "sha256": sha256(archive)}
-                    }
-                }
-            ),
-            encoding="utf-8",
-        )
-        paths = Paths.resolve(home=self.root / "workspace")
-        result = fetch_assets("models", manifest, ["toy"], paths)
-        self.assertEqual([str(paths.models / "toy")], result)
-        self.assertEqual(
-            "verified asset", (paths.models / "toy/payload.txt").read_text()
-        )
 
     def test_local_path_values_require_nonempty_strings(self):
         for key in ("home", "models", "data", "cache", "runs", "weights"):

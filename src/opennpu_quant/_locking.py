@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -24,3 +25,18 @@ class RunLock:
 
         fcntl.flock(self.stream, fcntl.LOCK_UN)
         self.stream.close()
+
+
+@contextmanager
+def cache_lock(path, *, shared=False):
+    """Wait for a cache reader/writer lock, released on interruption or process exit."""
+    import fcntl
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+") as stream:
+        fcntl.flock(stream, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(stream, fcntl.LOCK_UN)

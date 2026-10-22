@@ -1,4 +1,7 @@
+"""quantize(): calibrate (or reuse statistics) -> select ranges -> insert Q/DQ -> AdaRound."""
+
 from dataclasses import dataclass, replace
+from onnx import TensorProto
 from opennpu_quant.graph.model import load_model, model_identity
 from .calibration import CalibrationStats, calibrate, validate_statistics
 from .config import QuantizationConfig
@@ -61,7 +64,8 @@ def quantize(
     if ort.optimization != "ORT_DISABLE_ALL":
         raise ValueError("QDQ requires ORT_DISABLE_ALL")
     owned = load_model(model)
-    if any((v.type.tensor_type.elem_type not in (1, 7, 9) for v in owned.graph.input)):
+    supported = (TensorProto.FLOAT, TensorProto.INT64, TensorProto.BOOL)
+    if any(v.type.tensor_type.elem_type not in supported for v in owned.graph.input):
         raise ValueError(
             "Only FP32 features and explicit INT64/boolean structural inputs are supported"
         )

@@ -5,7 +5,7 @@ import shutil
 import tempfile
 import numpy as np
 from .._io import atomic_json, object_hash, read_json, sha256
-from .._locking import RunLock
+from .._locking import cache_lock
 from .._feeds import feed_digest, _VerifiedFeed, _fingerprint
 
 
@@ -189,7 +189,10 @@ def prepare_feed_cache(
             "before each replay and raises if it changed; e.g. verify_source=check_source"
         )
     directory.parent.mkdir(parents=True, exist_ok=True)
-    with RunLock(directory.with_name(directory.name + ".lock")):
+    # Published input caches are immutable. Only initial construction needs a writer.
+    with cache_lock(
+        directory.with_name(directory.name + ".lock"), shared=directory.exists()
+    ):
         if directory.exists():
             cache = FeedCache(directory, identity=identity, verify_source=verify_source)
             if cache.manifest["sample_count"] != expected_samples:

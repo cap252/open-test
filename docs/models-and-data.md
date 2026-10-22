@@ -1,0 +1,121 @@
+# Prepare models and data
+
+A new experiment needs a prepared dataset and an FP32 ONNX model bundle. This guide covers both, the files that make up a bundle and how to add your own model. Running experiments is covered in [Run experiments](run-pipeline.md).
+
+## Prepare datasets
+
+`data prepare` checks the dataset layout, image counts, ground truth and the separation of calibration and evaluation images. It then writes `<data>/<dataset>/manifest.json`. Image files are referenced in place, not copied. Most commands index data you have already downloaded and extracted. Automatic download is available only for ImageNet HF and LFW. Obtain the COCO, WIDER FACE and VOC archives separately before preparing them. Run only the commands for the datasets you need, and replace the paths with your own.
+
+```bash
+opennpu-quant data prepare imagenet --root /data/imagenet --source folder
+opennpu-quant data prepare coco --root /data/coco
+opennpu-quant data prepare widerface --root /data/widerface
+opennpu-quant data prepare voc --root /data/VOCdevkit/VOC2012
+opennpu-quant data prepare lfw_mobilefacenet --root /data/lfw --download
+```
+
+cnn30 uses ImageNet, COCO, WIDER FACE, VOC2012 and LFW. COCO keypoints is needed only for the additional PoseNet model, prepared with `opennpu-quant data prepare coco_keypoints --root /data/coco`.
+
+Use the same `--home` or `--data-dir` for preparation and execution. Preparation always indexes the full validation set, even if a later run evaluates only a few samples with `--limit`. `--limit` uses a prefix of the manifest, except for LFW ([LFW](#lfw)).
+
+| Dataset | Download through this CLI | Required layout | Full evaluation | Calibration |
+|---|---|---|---:|---|
+| ImageNet folder | No | `train/<wnid>/`, `val/<wnid>/` or `validation/` | 50,000 images | 1,000 training images selected with seed 20260917 |
+| ImageNet HF | `--source hf --download` | `train_images/`, `validation_images/` and label information. Use `--source hf` | 50,000 images | Packaged fixed list of 1,000 images |
+| COCO | No | `train2017/`, `val2017/`, `annotations/instances_val2017.json` | 5,000 images | Packaged fixed list of 128 training images |
+| COCO keypoints | No | The COCO images and `annotations/person_keypoints_val2017.json` | 5,000 images | 128 images from the PoseNet list `coco_keypoints.txt` |
+| WIDER FACE | No | `WIDER_train/images/`, `WIDER_val/images/` and the official `.mat` ground truth | 3,226 images | Packaged fixed list of 128 training images |
+| VOC2012 | No | `JPEGImages/`, `SegmentationClass/`, `ImageSets/Segmentation/val.txt` | 1,449 images | Packaged fixed list of 128 training images |
+| LFW | `--download` | `pairs.txt`, `data/lfw_funneled/`, `lfw_funneled.json` landmarks | 6,000 pairs (15,402 views) | Packaged 128 images that do not appear in any evaluation pair |
+
+The two ImageNet layouts select different calibration images. Matching statistics from another run requires the same list, order and preprocessing, not just the same dataset. `--download` is available for LFW and for ImageNet with `--source hf`. The ImageNet download needs authorized Hugging Face access and the data packages described in [Install](../README.md#install).
+
+### LFW
+
+The CPU and CUDA `setup.sh` profiles include `scikit-image==0.25.2` for alignment. It is also part of the package's `images` extra. Preparation checks this dependency before downloading or reading the full dataset.
+
+Preparation writes aligned 112×112 face crops into the data directory. `--download` fetches the pair list, images and landmarks from fixed URLs and checks their SHA256 hashes. If any image fails to align, preparation records the failures and writes no manifest.
+
+A full evaluation scores all 6,000 pairs from 15,402 original and horizontally flipped image views. It reports `verification_accuracy`, with thresholds selected over ten folds, and `fixed_angle_accuracy` ([MobileFaceNet on LFW](model-reference.md#notes-on-specific-models)). LFW accuracy always needs all pairs.
+
+### Full LFW evaluation only
+
+Use the full manifest with `run --limit 6000` or `evaluation.limit: null`, or use `reproduce prepare --limit full`. A numeric limit of 6,000 or more includes all pairs. A smaller effective limit is rejected before any model calibrates or infers, including mixed-model requests. In `run`, omitting `--limit` uses the experiment's `evaluation.limit`.
+
+The complete pair order, ten folds and both image views are preserved. Calibration still uses the separate 128-image split. For small checks, select `--models resnet18,yolov5s`.
+
+LFW smoke manifests and partial results are not accepted for execution, reporting or comparison in this version. Keep existing artifacts unchanged and prepare a new full evaluation using the commands above. The removed `--functional-check` and `data prepare --smoke` options are not supported.
+
+## Export FP32 ONNX
+
+```bash
+opennpu-quant export resnet18
+```
+
+Export downloads the checkpoint and upstream code pinned in the recipe, verifies their SHA256 hash or commit, converts the model and compares the ONNX outputs with the source framework. Validation defaults to `strict`. `--validation functional` records finite numerical differences and continues, but still rejects shape and dtype errors, non-finite values and graph-partition failures. `model.json` records the export result and the numerical parity separately.
+
+Running `export` again converts the model again. To evaluate a bundle you already have, skip export and follow [Evaluate an existing ONNX model](run-pipeline.md#evaluate-an-existing-onnx-model). Use `--weights FILE` to reuse an identical source checkpoint, or `--source-dir DIR` for a clean checkout at the pinned commit.
+
+### Extra export environments
+
+You need these environments only to export models.
+
+| Models | Environment |
+|---|---|
+| torchvision classifiers and other base Torch models | Included in the `setup.sh` environment |
+| timm models, additional YOLO models, NanoDet and others | [cnn38-linux-py311.txt](../requirements/cnn38-linux-py311.txt) |
+| The three MMSeg models | A separate interpreter. Follow the Torch 2.1.0 and compiled MMCV 2.1.0 installation order in [cnn38-mmseg.txt](../requirements/cnn38-mmseg.txt) |
+| TF SSD and DeepLab | The TensorFlow/tf2onnx packages in the setup environment, or a separate interpreter selected with `--python` if they conflict |
+
+The setup environment does not require or install pip. From the repository root, select the same uv executable that setup uses and specify the destination interpreter explicitly. If uv was downloaded by setup, it is at `.tools/uv` and may not be on `PATH`.
+
+```bash
+if command -v uv >/dev/null 2>&1; then
+  UV_BIN=uv
+else
+  UV_BIN="$PWD/.tools/uv"
+fi
+"$UV_BIN" pip install --python "$PWD/.venv/bin/python" \
+  -r requirements/cnn38-linux-py311.txt
+```
+
+For MMSeg, create a separate environment and use the ordered install commands in [cnn38-mmseg.txt](../requirements/cnn38-mmseg.txt). Every install command must target that environment, not the main `.venv`.
+
+```bash
+"$UV_BIN" venv --python 3.11 workspace/mmseg-venv
+"$UV_BIN" pip install --python workspace/mmseg-venv/bin/python \
+  torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cpu
+"$UV_BIN" pip install --python workspace/mmseg-venv/bin/python \
+  mmcv==2.1.0 -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.1/index.html
+"$UV_BIN" pip install --python workspace/mmseg-venv/bin/python \
+  -r requirements/cnn38-mmseg.txt
+opennpu-quant export deeplabv3_r50_voc --python "$PWD/workspace/mmseg-venv/bin/python"
+```
+
+With `--python`, export runs in that interpreter, while quantization and evaluation stay in the main environment. Do not use `mmcv-lite` for MMSeg. The TF DeepLab export checks its output on VOC validation images, so prepare VOC first.
+
+## Model bundles and recipes
+
+```text
+<models-dir>/<model>/
+├── network.onnx          Quantization and inference target
+├── preprocess.onnx       Optional CPU input graph
+├── postprocess.onnx      Optional CPU output graph
+├── model.json            Export validation and file hashes
+└── recipe.yaml           Optional local recipe
+```
+
+Include the host graphs a model needs, using the file names in its recipe. If `model.json` exists, loading the bundle verifies the graph hashes. Quantization changes only `network.onnx`, and the CPU host graphs stay in FP32. For some models the recipe input differs from the actual network input, and the [model reference](model-reference.md) lists both.
+
+A recipe defines the inputs, preprocessing, graph boundaries, decoder, metric and source checkpoint. See the packaged [ResNet-18 recipe](../src/opennpu_quant/resources/models/resnet18.yaml) for an example. A local recipe overrides the bundle settings of a packaged model, as described in [Precedence and local recipes](evaluation-profiles.md#precedence-and-local-recipes).
+
+Models with variable input sizes are checked at three different resolutions during export, and their input caches keep each sample's shape.
+
+## Add a custom model
+
+1. Place the ONNX file and any host graphs in `<models-dir>/<name>/`.
+2. Copy a similar packaged recipe to `recipe.yaml` and edit the name, input, preprocessing, decoder and graph mappings. When the copy gets a different model name, remove its `decode.profile` or set it to `current_v1`.
+3. Copy an experiment file, add the model and its percentile, and give the experiment a new name ([Configuration reference](configuration.md#example-change-a-percentile)).
+4. Check the settings with `opennpu-quant run -c my_experiment.yaml --models my_model --dry-run`, then verify inputs, outputs and evaluation on a small run.
+
+If no built-in decoder fits the model's outputs, write a custom evaluator with the [Python API](api.md). Custom `module:function` preprocessing turns off input caching and result reuse, because its identity cannot be determined automatically. Unsupported operators and other graph limits are listed in [Common limitations for custom models](quantization.md#10-common-limitations-for-custom-models).

@@ -1,6 +1,6 @@
 from pathlib import Path
 import numpy as np
-from ..fetch import extract_archive
+from .download import extract_archive
 
 
 def export_model(recipe, weight, feeds, target, scratch):
@@ -44,7 +44,10 @@ def export_model(recipe, weight, feeds, target, scratch):
             return tuple(result[n] for n in names)
 
         model, _ = tf2onnx.convert.from_function(
-            wrapper, input_signature=signature, opset=18, output_path=str(target)
+            wrapper,
+            input_signature=signature,
+            opset=recipe["export"]["opset"],
+            output_path=str(target),
         )
         for i, (value, name) in enumerate(zip(model.graph.output, names)):
             if value.name != name:
@@ -87,7 +90,7 @@ def export_model(recipe, weight, feeds, target, scratch):
         input_names=[graph_input],
         output_names=[graph_output],
         shape_override={graph_input: recipe["input"]["shape"]},
-        opset=18,
+        opset=recipe["export"]["opset"],
         output_path=str(target),
     )
     from .tf_layout import tensorflow_final_graph, static_logits_resize

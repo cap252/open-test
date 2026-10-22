@@ -1,0 +1,47 @@
+name: retinanet_resnet50_fpn
+title: RetinaNet
+task: detection
+dataset: coco
+metric: AP
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - 800
+  - 800
+  layout: NCHW
+graphs:
+  network: network.onnx
+  postprocess: postprocess.onnx
+preprocess:
+  kind: resize_normalize
+  size: 800
+  mean:
+  - 0
+  - 0
+  - 0
+  std:
+  - 255
+  - 255
+  - 255
+decode:
+  kind: retinanet
+  output: predictions
+source:
+  url: https://download.pytorch.org/models/retinanet_resnet50_fpn_coco-eeacb38b.pth
+  sha256: eeacb38b7cec8cf93c57867e05eaab621047f19b0d2ec5accaa405f690da15b7
+  variant: retinanet_resnet50_fpn
+  code_revision: 3ac97aa9120137381ed1060f37237e44485ac2aa
+  package:
+    name: torchvision
+    version: 0.20.1
+export:
+  family: retinanet
+  opset: 18
+  simplify: true
+  outputs:
+  - boxes
+  - labels
+  - scores
+  split_detector: true

@@ -1,3 +1,5 @@
+"""INT8 scale arithmetic: FP32-normal checks and power-of-two (PoT) snapping."""
+
 import numpy as np
 
 MIN_EXPONENT = -126
@@ -32,6 +34,11 @@ def _power(exponent):
 
 
 def pot_scale(value, policy):
+    """Snap a scale to a power of two in log2 space.
+
+    pot_nearest = 2^rint(log2 s) and pot_ceil = 2^ceil(log2 s). Rounding happens on the
+    exponent, so pot_nearest maps 0.72 to 1.0 (log2 0.72 = -0.47), not to the closer 0.5.
+    """
     normal_scale(value)
     logarithm = np.log2(np.asarray(value, np.float64))
     if policy == "pot_nearest":
@@ -70,6 +77,11 @@ def exponents(value):
 
 
 def activation_parameters(limits, base_scale, base_zero, symmetric, policy):
+    """Final activation (scale, zero point, audit row) from ORT's base scale.
+
+    PoT policies snap the scale; an asymmetric zero point is then recomputed so that the
+    range minimum maps to -128 again.
+    """
     low, high = float(limits["lowest"]), float(limits["highest"])
     if not np.isfinite([low, high]).all() or low > high:
         raise ValueError("Invalid activation range")
@@ -121,6 +133,12 @@ def candidate_mse(weight, scale, encode):
 
 
 def choose_weight_scale(weight, base_scale, policy, required_scale, encode):
+    """Pick one PoT weight scale (a whole tensor or one channel).
+
+    Candidates are the snapped base scale, or for pot_mse both neighbouring powers of two
+    scored by the MSE of the stored INT8 codes. A candidate below required_scale (needed
+    to keep the INT32 bias in range) is raised to the next power of two above it.
+    """
     candidates = (
         pot_candidates(base_scale)
         if policy == "pot_mse"

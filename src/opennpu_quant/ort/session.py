@@ -1,7 +1,10 @@
+"""ONNX Runtime sessions with the package's numerical policy (see OrtConfig)."""
+
 from .config import OrtConfig
 
 
 def runtime(config=None):
+    """Import onnxruntime and warn (or fail with strict_versions) on an unverified version."""
     import onnxruntime as ort
 
     policy = config if config is not None else OrtConfig.cpu()
@@ -16,6 +19,10 @@ def runtime(config=None):
 
 
 def create_session(model, config, *, profile=None, optimized=None):
+    """Session for a model path or ModelProto under an OrtConfig.
+
+    Requested providers must be available and active; CUDA never silently falls back to CPU.
+    """
     ort = runtime(config)
     missing = set(config.providers) - set(ort.get_available_providers())
     if missing:

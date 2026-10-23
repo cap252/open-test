@@ -7,6 +7,27 @@ from onnx.external_data_helper import _get_all_tensors, convert_model_from_exter
 from opennpu_quant._io import object_hash, sha256
 
 
+def _reject_external_sparse(message):
+    # ONNX 1.17's external-data loader omits sparse values and indices.
+    if isinstance(message, onnx.SparseTensorProto):
+        if any(
+            tensor.data_location == onnx.TensorProto.EXTERNAL
+            for tensor in (message.values, message.indices)
+        ):
+            raise ValueError(
+                "External sparse ONNX tensors are not supported. "
+                "Embed their values and indices or convert to dense weights."
+            )
+        return
+    if isinstance(message, onnx.TensorProto):
+        return
+    for field, value in message.ListFields():
+        if field.type == field.TYPE_MESSAGE:
+            children = value if field.label == field.LABEL_REPEATED else (value,)
+            for child in children:
+                _reject_external_sparse(child)
+
+
 def load_model(source):
     """Owned copy of an ONNX model with external weights inlined.
 
@@ -15,6 +36,7 @@ def load_model(source):
     if isinstance(source, (str, Path)):
         path = Path(source).resolve()
         header = onnx.load(path, load_external_data=False)
+        _reject_external_sparse(header)
         for tensor in _get_all_tensors(header):
             if tensor.data_location == onnx.TensorProto.EXTERNAL:
                 location = dict(((v.key, v.value) for v in tensor.external_data)).get(
@@ -27,6 +49,7 @@ def load_model(source):
         model = onnx.load(path, load_external_data=True)
     elif isinstance(source, onnx.ModelProto):
         model = copy.deepcopy(source)
+        _reject_external_sparse(model)
         for tensor in _get_all_tensors(model):
             if tensor.data_location == onnx.TensorProto.EXTERNAL and (
                 not tensor.HasField("raw_data")
@@ -55,6 +78,7 @@ def external_data_files(path):
         model = onnx.load(path, load_external_data=False)
     except DecodeError as error:
         raise ValueError("Invalid ONNX graph: " + str(path)) from error
+    _reject_external_sparse(model)
     rows = {}
     for tensor in _get_all_tensors(model):
         if tensor.data_location == onnx.TensorProto.EXTERNAL:

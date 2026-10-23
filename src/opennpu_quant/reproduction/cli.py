@@ -24,6 +24,21 @@ def add_parser(subparsers):
         description="Prepare and evaluate existing models. This workflow reuses fixed ONNX artifacts without export, calibration or AdaRound training.",
     )
     commands = root.add_subparsers(dest="reproduce_command", required=True)
+    lfw = commands.add_parser(
+        "prepare-lfw", help="Regenerate and verify the frozen LFW input cache locally"
+    )
+    lfw.add_argument("--selection", help="Selection manifest from the model bundle")
+    lfw.add_argument("--bindings", required=True)
+    lfw.add_argument(
+        "--root", required=True, help="Local LFW originals, pairs and landmarks"
+    )
+    lfw.add_argument(
+        "--download", action="store_true", help="Download pinned LFW source files"
+    )
+    lfw.add_argument(
+        "--output", required=True, help="Cache directory matching the bindings"
+    )
+    lfw.set_defaults(handler=handle)
     prepare = commands.add_parser(
         "prepare", help="Verify selected artifacts and bind ordered data"
     )
@@ -103,6 +118,16 @@ def add_parser(subparsers):
 
 def handle(args):
     from importlib import import_module
+
+    if args.reproduce_command == "prepare-lfw":
+        from .lfw import prepare_lfw
+
+        return prepare_lfw(
+            **{
+                k: getattr(args, k)
+                for k in ("selection", "bindings", "root", "output", "download")
+            }
+        )
 
     keys = {
         "prepare": ("bindings", "output", "selection", "limit", "model_set"),

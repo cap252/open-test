@@ -41,7 +41,8 @@ Prepare the evaluation datasets using the [dataset guide](docs/models-and-data.m
 Start with ResNet-18 and YOLOv5s from `core10`. The example uses three images per model for a quick execution check of their saved FP32 and PoT RTN graphs. You can also evaluate the full dataset for each model:
 
 ```bash
-opennpu-quant reproduce prepare --bindings workspace/repro/bindings.json \
+opennpu-quant reproduce prepare --selection bundle/selections/selected-210.json \
+  --bindings workspace/repro/bindings.json \
   --models resnet18,yolov5s --conditions fp32,asym_pc_pot_rtn --limit 3 \
   --output workspace/repro/representative-3
 opennpu-quant reproduce run --package workspace/repro/representative-3 \
@@ -58,10 +59,11 @@ For full evaluation of the same models and conditions, set `--limit full` in `re
 
 ### 3. Evaluate all selected conditions
 
-With all assets available, evaluate `cnn30`: 30 models with FP32 and six selected INT8 conditions each, or **210 conditions**. This reuses the supplied RTN and AdaRound graphs without training them again.
+First [generate and verify the LFW input cache locally](docs/reproducing-results.md#generate-the-lfw-input-cache). LFW images and input tensors are not included in the model release. With all assets available, evaluate `cnn30`: 30 models with FP32 and six selected INT8 conditions each, or **210 conditions**. This reuses the supplied RTN and AdaRound graphs without training them again.
 
 ```bash
-opennpu-quant reproduce prepare --bindings workspace/repro/bindings.json \
+opennpu-quant reproduce prepare --selection bundle/selections/selected-210.json \
+  --bindings workspace/repro/bindings.json \
   --model-set cnn30 --limit full --output workspace/repro/cnn30-full
 opennpu-quant reproduce run --package workspace/repro/cnn30-full \
   --bindings workspace/repro/bindings.json --device cuda:0 --storage predictions \

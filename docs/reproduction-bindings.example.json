@@ -1,14 +1,8 @@
 {
-  "research-runs": "/data/frozen/research-runs",
-  "research-repo": "/data/frozen/research-repo",
-  "reference-metrics-v1": "/data/frozen/reference-metrics-v1",
-  "data-manifests": "/data/frozen/data-manifests",
-  "gtx-package": "/data/frozen/gtx-package",
+  "model-bundle": "/absolute/path/to/bundle",
   "dataset-imagenet": "/data/datasets/imagenet-1k",
   "dataset-coco": "/data/datasets/coco",
-  "dataset-coco_keypoints": "/data/datasets/coco",
   "dataset-widerface": "/data/datasets/widerface",
   "dataset-voc": "/data/datasets/voc2012/VOCdevkit/VOC2012",
-  "final-data-manifests": "/data/frozen/final-data-manifests",
-  "dataset-lfw": "/data/frozen/final-data-manifests/lfw_mobilefacenet"
+  "lfw-cache": "/absolute/path/to/workspace/repro/lfw-cache"
 }

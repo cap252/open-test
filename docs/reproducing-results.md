@@ -2,17 +2,17 @@
 
 You can download the ONNX files from GitHub Releases.
 
-This guide uses the FP32/INT8 ONNX files, records and data manifests of the original measurements. Obtain evaluation datasets using the [dataset download guide](models-and-data.md#prepare-datasets), and prepare the files and path settings listed below. With prepared data and an FP32 model, you can use `run` to create and evaluate new INT8 models independently of the original measurement assets ([quick start](../README.md#quick-start)).
+This guide uses the FP32/INT8 ONNX files, records and data manifests of the original measurements. Obtain evaluation datasets using the [dataset download guide](models-and-data.md#prepare-datasets), and prepare the files and path settings listed below. With prepared data and an FP32 model, you can use `run` to create and evaluate new INT8 models independently of the original measurement assets ([create new INT8 models](../README.md#create-new-int8-models)).
 
 ## What this workflow does
 
 `reproduce` re-evaluates the original models as they are. Nothing is exported, calibrated or trained, and an AdaRound condition selects a model that was already trained. Each model has seven conditions: FP32 plus RTN and AdaRound for Asym/PC float, Asym/PC PoT and Sym/PT PoT. Here `float` means unconstrained INT8 scales, not FP32.
 
-The packaged selection (`selected.json`) supplies each condition's percentile, evaluation profile, GPU memory limit and AdaRound settings. The workflow has four steps: `reproduce prepare` checks the assets, `reproduce run` evaluates, `reproduce report` writes tables and `reproduce compare` compares two runs.
+The selection manifest supplies each condition's percentile, evaluation profile, GPU memory limit and AdaRound settings. The workflow has four steps: `reproduce prepare` checks the assets, `reproduce run` evaluates, `reproduce report` writes tables and `reproduce compare` compares two runs.
 
 ## Bind the assets
 
-Prepare the model files, companion records and datasets before this step; `reproduce` does not download them. The packaged selection identifies each required file by ID and SHA256 hash. The bindings file maps those asset groups to local directories, so users with different storage locations can run the same models and data. Copy the template below, then edit its path values.
+Extract the model release into `bundle/` and prepare the evaluation datasets. The examples below use `bundle/selections/selected-210.json`, which identifies the release files by artifact ID and SHA256. The packaged selection retains the original records and uses different bindings. Do not substitute it for the release selection. Copy the template below, then edit its path values.
 
 `reproduce prepare` verifies these existing assets and creates an execution package. It is separate from `data prepare`, which creates dataset manifests for new experiments.
 
@@ -21,24 +21,21 @@ mkdir -p workspace/repro
 cp docs/reproduction-bindings.example.json workspace/repro/bindings.json
 ```
 
-Edit the path values in `bindings.json`. For example, `"research-runs": "/data/frozen/research-runs"` resolves `artifact://research-runs/…` under that directory. Keep the root IDs, the relative paths inside each root and the file contents unchanged.
+Edit the path values in `bindings.json`. Set `model-bundle` to the absolute path of the extracted `bundle/` directory and `lfw-cache` to the absolute path of the cache you will generate below. Keep the root IDs, relative paths within the bundle and file contents unchanged.
 
 | Root | Contents |
 |---|---|
-| `research-repo`, `research-runs` | FP32 and INT8 ONNX files with any external weight files, CPU host graphs, QDQ audits and the original `result.json` records |
-| `data-manifests`, `final-data-manifests` | Fixed data manifests that define each split and its order |
-| `dataset-imagenet`, `dataset-coco`, `dataset-coco_keypoints`, `dataset-widerface`, `dataset-voc` | Image and annotation roots |
-| `dataset-lfw` | The official LFW pair list and verified original/flipped input caches |
-| `reference-metrics-v1` | Reference records of the MobileFaceNet conditions, stored with the current metric names |
-| `gtx-package` | Saved raw GPU outputs that serve as comparison references |
+| `model-bundle` | ONNX files, external weights, CPU host graphs, QDQ audits, data manifests and reference records from the release |
+| `dataset-imagenet`, `dataset-coco`, `dataset-widerface`, `dataset-voc` | Local image and annotation roots |
+| `lfw-cache` | Locally generated `manifest.json`, `tensor_0.npy` and `verification.json` |
 
-Checking ResNet-18 alone needs `research-repo`, `research-runs`, `data-manifests` and `dataset-imagenet`. The MobileFaceNet conditions also need `reference-metrics-v1`. Conditions without comparison references still run, but their comparison with the original raw outputs stays `pending`. The tool reads files from `research-repo` and never imports Python code from it.
+Checking ResNet-18 alone needs `model-bundle` and `dataset-imagenet`. MobileFaceNet needs `model-bundle` and the verified `lfw-cache`. A condition can run without a raw GPU output reference, but that comparison remains `pending`.
 
 An ONNX delivery must include its external weights, required CPU host graphs, input/output mapping and per-model execution conventions, QDQ audits, ordered data manifests and hashes, reference records, and a bindings example. A network file alone is insufficient. Packaging and uploading such a delivery is a separate step from this repository workflow.
 
 ### External ONNX weights
 
-For a graph with external tensor data, its selection record must include an `external_data` mapping from every referenced filename to its expected SHA256. Paths are relative to the ONNX file and must remain inside its directory. This applies to the network and both CPU host graphs.
+For a graph with external tensor data, its selection record must include an `external_data` mapping from every referenced filename to its expected SHA256. Paths are relative to the ONNX file and must remain inside its directory. This applies to the network and both CPU host graphs. External data in sparse ONNX tensors is not supported.
 
 ```json
 {
@@ -54,12 +51,33 @@ Obtain these expected hashes from the model provider's verified manifest. Hashin
 
 Preparation checks these files and includes their expected hashes in the condition identity. Execution checks them again before reusing a completed result or interrupted samples. An older external-weight package without these hashes needs a new selection and preparation. Existing self-contained ONNX packages keep their format. Moving unchanged files together only requires updated bindings.
 
+## Generate the LFW input cache
+
+LFW images and input tensors are not included in the model release. Generate the input cache locally with `reproduce prepare-lfw`. The command verifies the generated inputs against the recorded reference before they can be used for reproduction.
+
+```bash
+opennpu-quant reproduce prepare-lfw \
+  --selection bundle/selections/selected-210.json \
+  --bindings workspace/repro/bindings.json \
+  --root /data/lfw --download \
+  --output workspace/repro/lfw-cache
+```
+
+Set the `lfw-cache` binding to the absolute path corresponding to `--output` before running this command. Keep the cache outside `--root`. With `--download`, the command obtains the pinned original images, pair list and landmarks. Without it, provide `pairs.txt`, `lfw_funneled.json` and the original JPEGs under `data/lfw_funneled/<person>/` within `--root`.
+
+The command performs CPU alignment and normalization for all 6,000 pairs, preserving the original and flipped views in their recorded order. It does not run ONNX inference, calibration or AdaRound. The cache needs about 2.2 GiB in addition to the originals. A successful result reports `state: verified` and `sample_count: 15402`. Every input digest, tensor file hash and the manifest hash must match the selection. An interrupted or mismatched build is not published as a complete cache. Existing output is reused only after verification and is never overwritten.
+
+`verification.json` records the local generation environment and code identity separately from the unchanged reference cache manifest. If a source file or generated input differs, the command fails rather than accepting a numerical tolerance. Keep originals and generated tensors local, outside Git and model release archives.
+
+`data prepare lfw_mobilefacenet` prepares aligned images and a dataset manifest for ordinary `run` experiments. `reproduce prepare-lfw` instead creates the verified input cache required by the fixed-model release selection. After it succeeds, use `reproduce prepare --limit full` below.
+
 ## Check one model
 
 Start with FP32 and PoT RTN for ResNet-18 on three images:
 
 ```bash
-opennpu-quant reproduce prepare --bindings workspace/repro/bindings.json \
+opennpu-quant reproduce prepare --selection bundle/selections/selected-210.json \
+  --bindings workspace/repro/bindings.json \
   --models resnet18 --conditions fp32,asym_pc_pot_rtn --limit 3 \
   --output workspace/repro/resnet18-3
 opennpu-quant reproduce run --package workspace/repro/resnet18-3 \
@@ -86,7 +104,7 @@ After fixing assets, prepare into a new `--output` directory because `prepare` n
 
 ## Choose a model set
 
-`reproduce prepare` and `reproduce configs` default to `cnn30` for the packaged selection.
+`reproduce prepare` and `reproduce configs` default to `cnn30` for the packaged selection. The table below describes those original records. A release selection contains only its listed models, so the CNN30 release supports 210 conditions. Additional-model examples require a selection and bindings that include those models.
 
 | Selection | Models | Conditions |
 |---|---:|---:|
@@ -120,7 +138,8 @@ Prepare a new package for each scope with the options below. Then run `reproduce
 For example, the full evaluation of `cnn30`:
 
 ```bash
-opennpu-quant reproduce prepare --bindings workspace/repro/bindings.json \
+opennpu-quant reproduce prepare --selection bundle/selections/selected-210.json \
+  --bindings workspace/repro/bindings.json \
   --model-set cnn30 --limit full --output workspace/repro/cnn30-full
 opennpu-quant reproduce run --package workspace/repro/cnn30-full \
   --bindings workspace/repro/bindings.json --device cuda:0 --storage predictions \

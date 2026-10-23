@@ -70,10 +70,12 @@ The Python postprocessing example uses `ModelEvaluator` and `resolve` as extensi
 | `test_segmentation_predictions.py` | A VOC-style run whose saved predictions replay to the same metrics |
 | `test_recovery.py` | Common recovery operation order, exact FP32 self-comparison, mixed units, missing denominators and serialized precision |
 | `test_lfw.py` | Full LFW pair order, ten folds, flip views, unchanged calibration input selection, early rejection of partial mixed-model requests and archived artifacts, manifest tampering |
-| `test_auxiliary_metrics.py` | Fixed-angle normalization bits, FP64 angle threshold boundary, percentage conversion, canonical metric names compared without runtime renaming, diagnostic field paths, conflicting values and bitwise verdicts |
+| `test_auxiliary_metrics.py` | Fixed-angle normalization bits, high-precision arccos references, same-environment repeatability, FP64 angle threshold boundary, percentage conversion, canonical metric names, diagnostic field paths, conflicting values and bitwise verdicts |
 | `test_evaluation_contracts.py` | Profile resolution for every saved recipe, descriptive profile names in experiments, the generic `current_v1` behavior, and the Python postprocessing hook |
 | `test_evaluation_defaults.py` | Packaged defaults matching the selection, local bundles, comparison precedence and classifier tie order |
 | `test_evaluation_profiles.py` | YOLO profile behavior (NMS, clipping, mask arithmetic, metric area), real evaluator routing and reuse rejection. Needs Torch and Torchvision |
+
+The fixed-angle math check uses [20 high-precision reference cases](fixtures/face_angle_reference.json), including endpoints and inputs near the 74.18-degree threshold. The references were computed from exact FP32 inputs at 100 and 200 decimal digits, with matching stored digits. The test requires arccos error within one FP32 spacing of the mathematical reference. Its degree-conversion budget includes that error propagated by 180/pi and one additional FP32 spacing. This is a numeric test contract for these cases, not a guarantee about every input or CPU. Normalization, threshold semantics and same-environment repeatability are checked separately. Runtime metric comparisons and bitwise reproduction verdicts are unchanged.
 
 ### Runs, reuse and reports
 

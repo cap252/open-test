@@ -1,6 +1,8 @@
-"""Auxiliary metric schema compatibility and exact fixed-angle arithmetic."""
+"""Auxiliary metrics, fixed-angle numeric accuracy and protocol arithmetic."""
 
 import copy
+import json
+import math
 from pathlib import Path
 import tempfile
 import unittest
@@ -130,12 +132,115 @@ class FixedAngleArithmeticTests(unittest.TestCase):
         first = rng.standard_normal((6, 128)).astype(np.float32)
         second = rng.standard_normal((6, 128)).astype(np.float32)
         before = first.tobytes(), second.tobytes()
-        accuracy, angles = _fixed_angle_verification(first, second, np.zeros(6, bool))
-        self.assertEqual(1.0, accuracy)
-        self.assertEqual(
-            "d486b8429606c1424a8ab6422b58a64275afb042c737ab42",
-            angles.tobytes().hex(),
+        cosine = np.array(
+            [
+                -0.03949250280857086,
+                -0.11342641711235046,
+                -0.022165633738040924,
+                0.1188855916261673,
+                0.028921369463205338,
+                0.07656341791152954,
+            ],
+            dtype=np.float32,
         )
+        radians = np.arange(6, dtype=np.float32)
+        expected = np.full(6, 90, dtype=np.float32)
+        # Keep the FP32 normalization contract independent of CPU math dispatch.
+        with (
+            patch(
+                "opennpu_quant.evaluation.face_verification.np.arccos",
+                return_value=radians,
+            ) as acos,
+            patch(
+                "opennpu_quant.evaluation.face_verification.np.degrees",
+                return_value=expected,
+            ) as degrees,
+        ):
+            accuracy, angles = _fixed_angle_verification(
+                first, second, np.zeros(6, bool)
+            )
+        acos.assert_called_once()
+        degrees.assert_called_once()
+        self.assertEqual(np.float32, acos.call_args.args[0].dtype)
+        self.assertEqual(cosine.tobytes(), acos.call_args.args[0].tobytes())
+        self.assertIs(radians, degrees.call_args.args[0])
+        self.assertIs(expected, angles)
+        self.assertEqual(1.0, accuracy)
+        self.assertEqual(before, (first.tobytes(), second.tobytes()))
+
+    def test_angles_against_high_precision_reference(self):
+        fixture = json.loads(
+            (Path(__file__).parent / "fixtures/face_angle_reference.json").read_text()
+        )
+        rows = fixture["cases"]
+        cosines = np.frombuffer(
+            bytes.fromhex("".join(row["cosine_le_hex"] for row in rows)), dtype="<f4"
+        ).astype(np.float32)
+        reference_radians = np.array([float(row["radians"]) for row in rows])
+        reference_degrees = np.array([float(row["degrees"]) for row in rows])
+        first = np.zeros((len(rows), 128), np.float32)
+        second = np.zeros_like(first)
+        first[:, 0], second[:, 0] = cosines, 1
+        observed = {}
+        native_acos = np.arccos
+
+        def capture_cosine(value):
+            observed["cosine"] = value.copy()
+            observed["radians"] = native_acos(value)
+            return observed["radians"]
+
+        # Feed exact cosine values to the real math functions. Normalization is
+        # covered separately, so its rounding cannot hide an arccos error here.
+        with (
+            patch(
+                "opennpu_quant.evaluation.face_verification.np.linalg.norm",
+                return_value=np.ones((len(rows), 1), np.float32),
+            ),
+            patch(
+                "opennpu_quant.evaluation.face_verification.np.arccos",
+                side_effect=capture_cosine,
+            ),
+        ):
+            _, angles = _fixed_angle_verification(
+                first, second, np.zeros(len(rows), bool)
+            )
+        np.testing.assert_array_equal(cosines, observed["cosine"])
+        for actual in (observed["radians"], angles):
+            self.assertEqual(np.float32, actual.dtype)
+            self.assertEqual((len(rows),), actual.shape)
+            self.assertTrue(np.isfinite(actual).all())
+        # One binary32 spacing from the high-precision acos result. Converting
+        # radians to degrees adds one spacing for the constant and multiplication.
+        rad_budget = np.abs(np.spacing(reference_radians.astype(np.float32))).astype(
+            np.float64
+        )
+        deg_budget = rad_budget * (180 / math.pi) + np.abs(
+            np.spacing(reference_degrees.astype(np.float32))
+        ).astype(np.float64)
+        for actual, reference, budget in (
+            (observed["radians"], reference_radians, rad_budget),
+            (angles, reference_degrees, deg_budget),
+        ):
+            np.testing.assert_array_less(
+                np.abs(actual.astype(np.float64) - reference),
+                np.nextafter(budget, np.inf),
+            )
+
+    def test_native_angles_repeat_bitwise_and_preserve_inputs(self):
+        rng = np.random.default_rng(143)
+        first = rng.standard_normal((6, 128)).astype(np.float32)
+        second = rng.standard_normal((6, 128)).astype(np.float32)
+        before = first.tobytes(), second.tobytes()
+        accuracy, angles = _fixed_angle_verification(first, second, np.zeros(6, bool))
+        repeated_accuracy, repeated = _fixed_angle_verification(
+            first, second, np.zeros(6, bool)
+        )
+        self.assertEqual(np.float32, angles.dtype)
+        self.assertEqual((6,), angles.shape)
+        self.assertTrue(np.isfinite(angles).all())
+        self.assertEqual(1.0, accuracy)
+        self.assertEqual(accuracy, repeated_accuracy)
+        self.assertEqual(angles.tobytes(), repeated.tobytes())
         self.assertEqual(before, (first.tobytes(), second.tobytes()))
 
     def test_threshold_compares_stored_angles_as_float64(self):

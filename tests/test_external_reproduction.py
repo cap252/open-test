@@ -271,3 +271,222 @@ class ExternalReproductionTests(unittest.TestCase):
             self.assertEqual({"fail": 1}, prepared(root)["counts"])
             with self.assertRaisesRegex(ValueError, "external data identity"):
                 _reference(entry, Resolver(root / "bindings.json"))
+
+
+def sparse_fixture(
+    root, *, component="values", kind="network", container="initializer"
+):
+    source, selection = external_fixture(root, kind)
+    asset = selection["entries"][0]["graphs"][kind]
+    path = source / Path(asset["id"]).name
+    model = onnx.load(path)
+    original = model.graph.initializer[0]
+    values = onnx.numpy_helper.to_array(original)
+    sparse = onnx.helper.make_sparse_tensor(
+        onnx.numpy_helper.from_array(values.flatten(), original.name),
+        onnx.numpy_helper.from_array(np.arange(values.size, dtype=np.int64), "indices"),
+        list(values.shape),
+    )
+    tensor = getattr(sparse, component)
+    weight = source / ("sparse-" + component + ".bin")
+    weight.write_bytes(tensor.raw_data)
+    onnx.external_data_helper.set_external_data(tensor, weight.name)
+    tensor.ClearField("raw_data")
+    del model.graph.initializer[0]
+    if container == "initializer":
+        model.graph.sparse_initializer.append(sparse)
+    elif container == "constant":
+        model.graph.node.insert(
+            0,
+            onnx.helper.make_node("Constant", [], [original.name], sparse_value=sparse),
+        )
+    elif container == "subgraph":
+        branch = copy.deepcopy(model.graph)
+        del branch.input[:]
+        branch.sparse_initializer.append(sparse)
+        del model.graph.node[:]
+        model.graph.initializer.append(
+            onnx.numpy_helper.from_array(np.array(True), "condition")
+        )
+        model.graph.node.append(
+            onnx.helper.make_node(
+                "If",
+                ["condition"],
+                [model.graph.output[0].name],
+                then_branch=branch,
+                else_branch=branch,
+            )
+        )
+    else:
+        attribute = (
+            {"sparse_value": sparse}
+            if container == "function"
+            else {"sparse_values": [sparse]}
+        )
+        node = onnx.helper.make_node("Constant", [], [original.name], **attribute)
+        model.functions.append(
+            onnx.helper.make_function(
+                "test",
+                "SparseWeight",
+                [],
+                [original.name],
+                [node],
+                [onnx.helper.make_opsetid("", 18)],
+            )
+        )
+        model.opset_import.append(onnx.helper.make_opsetid("test", 1))
+        model.graph.node.insert(
+            0, onnx.helper.make_node("SparseWeight", [], [original.name], domain="test")
+        )
+    path.write_bytes(model.SerializeToString())
+    asset["sha256"] = sha256(path)
+    asset["external_data"] = {weight.name: sha256(weight)}
+    atomic_json(root / "selection.json", selection)
+    return path, weight, selection
+
+
+class SparseExternalReproductionTests(unittest.TestCase):
+    def test_executable_sparse_graph_is_rejected_by_prepare_even_with_hashes(self):
+        import onnxruntime as ort
+
+        for component in ("values", "indices"):
+            with (
+                self.subTest(component=component),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                root = Path(tmp)
+                path, _, _ = sparse_fixture(root, component=component)
+                # ORT 1.20 executes external values, but not external indices.
+                if component == "values":
+                    session = ort.InferenceSession(
+                        str(path), providers=["CPUExecutionProvider"]
+                    )
+                    actual = session.run(
+                        None, {"images": np.ones((1, 3, 4, 4), np.float32)}
+                    )[0]
+                    np.testing.assert_array_equal(actual, [[18, 21, 24, 27, 30, 33]])
+                self.assertEqual({"fail": 1}, prepared(root)["counts"])
+                row = unseal(root / "prepared/manifest.json")["conditions"][0]
+                self.assertIn("External sparse ONNX", str(row["missing"]))
+
+    def test_missing_sparse_values_and_indices_fail_for_network_and_host_graphs(self):
+        for kind in ("network", "preprocess", "postprocess"):
+            for component in ("values", "indices"):
+                with (
+                    self.subTest(kind=kind, component=component),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    root = Path(tmp)
+                    _, weight, selection = sparse_fixture(
+                        root, component=component, kind=kind
+                    )
+                    selection["entries"][0]["graphs"][kind].pop("external_data")
+                    atomic_json(root / "selection.json", selection)
+                    weight.unlink()
+                    self.assertEqual({"fail": 1}, prepared(root)["counts"])
+                    row = unseal(root / "prepared/manifest.json")["conditions"][0]
+                    self.assertIn("External sparse ONNX", str(row["missing"]))
+
+    def test_nested_sparse_attributes_and_functions_cannot_bypass_validation(self):
+        from opennpu_quant.graph.model import external_data_files, load_model
+
+        for container in ("constant", "subgraph", "function", "list_attribute"):
+            for component in ("values", "indices"):
+                with (
+                    self.subTest(container=container, component=component),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    path, _, _ = sparse_fixture(
+                        Path(tmp), component=component, container=container
+                    )
+                    for operation in (external_data_files, load_model):
+                        with self.assertRaisesRegex(ValueError, "External sparse ONNX"):
+                            operation(path)
+
+    def test_public_load_identity_and_save_reject_unresolved_sparse_data(self):
+        from opennpu_quant.graph.model import (
+            load_model,
+            model_identity,
+            bundle_identity,
+            save_model,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path, _, _ = sparse_fixture(root)
+            for source in (path, onnx.load(path, load_external_data=False)):
+                for operation in (load_model, model_identity):
+                    with self.assertRaisesRegex(ValueError, "External sparse ONNX"):
+                        operation(source)
+                with self.assertRaisesRegex(ValueError, "External sparse ONNX"):
+                    save_model(source, root / "copy.onnx")
+            with self.assertRaisesRegex(ValueError, "External sparse ONNX"):
+                bundle_identity(path)
+            self.assertFalse((root / "copy.onnx").exists())
+
+    def test_legacy_completed_and_interrupted_results_cannot_be_reused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _, weight, selection = sparse_fixture(root)
+            selection["entries"][0]["graphs"]["network"].pop("external_data")
+            atomic_json(root / "selection.json", selection)
+            # Create an old-style result with exactly the current run identity.
+            with patch("opennpu_quant.graph.model._reject_external_sparse"):
+                self.assertEqual({"ready": 1}, prepared(root)["counts"])
+                self.assertEqual(1, execute(root)["completed"])
+            folder = root / "run/resnet18__fp32"
+            result = folder / "result.json"
+            before = result.read_bytes()
+            raw = folder / "000000.npz"
+            raw_hash = sha256(raw)
+            weights = weight.read_bytes()
+            for missing in (False, True):
+                if missing:
+                    weight.unlink()
+                else:
+                    weight.write_bytes(bytes(len(weights)))
+                with (
+                    patch(
+                        "opennpu_quant.reproduction.execution.verify_complete"
+                    ) as reuse,
+                    patch(
+                        "opennpu_quant.reproduction.execution.create_session"
+                    ) as session,
+                ):
+                    self.assertEqual(1, execute(root)["failed"])
+                reuse.assert_not_called()
+                session.assert_not_called()
+                self.assertEqual(before, result.read_bytes())
+            result.unlink()
+            with patch(
+                "opennpu_quant.reproduction.execution.create_session"
+            ) as session:
+                self.assertEqual(1, execute(root)["failed"])
+            session.assert_not_called()
+            self.assertEqual(raw_hash, sha256(raw))
+            error = read_json(root / "run/run.json")["conditions"][0]["error"]
+            self.assertIn("External sparse ONNX", error)
+
+    def test_self_contained_sparse_model_still_loads_and_runs(self):
+        from opennpu_quant.graph.model import load_model
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path, weight, selection = sparse_fixture(root)
+            model = onnx.load(path, load_external_data=False)
+            tensor = model.graph.sparse_initializer[0].values
+            tensor.raw_data = weight.read_bytes()
+            tensor.ClearField("external_data")
+            tensor.ClearField("data_location")
+            path.write_bytes(model.SerializeToString())
+            weight.unlink()
+            graph = selection["entries"][0]["graphs"]["network"]
+            graph["sha256"] = sha256(path)
+            graph.pop("external_data")
+            atomic_json(root / "selection.json", selection)
+            self.assertEqual(
+                tensor.raw_data,
+                load_model(path).graph.sparse_initializer[0].values.raw_data,
+            )
+            self.assertEqual({"ready": 1}, prepared(root)["counts"])
+            self.assertEqual(1, execute(root)["completed"])

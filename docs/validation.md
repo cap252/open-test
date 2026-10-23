@@ -12,6 +12,8 @@ A result answers one of three questions, and each question needs its own evidenc
 
 CPU runs check functionality, and their numbers can differ from GPU runs. When a requested GPU run fails, the tool records the failure instead of substituting a CPU result.
 
+Hash checks establish the identity and integrity of models, inputs and saved files. Numerical agreement is a separate check: `reproduce` requires bitwise equality when repeating an input in the same session, while raw outputs across GPUs are compared with numerical tolerance. A differing output hash without retained tensors leaves the raw comparison `pending`. The [comparison rules](reproducing-results.md#gpu-environment-and-numerical-verdicts) explain the effect of a 1 ULP difference on each verdict.
+
 ## What has been verified
 
 The primary targets are core10 and cnn30. Historical validation covered all 38 packaged models (266 conditions), including cnn30's 210 selected conditions. Selecting cnn30 does not constitute a new execution of those conditions. Results on a new server must be judged from that server's own outputs and environment records.

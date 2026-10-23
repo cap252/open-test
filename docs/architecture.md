@@ -1,6 +1,6 @@
 # How opennpu-quant works
 
-opennpu-quant measures how much accuracy an INT8 model keeps relative to FP32. This page walks through the six stages between an image file and a row in the report, then maps them to the code. Commands and options are in [Run experiments](run-pipeline.md).
+opennpu-quant measures how much accuracy an INT8 model keeps relative to FP32. This page explains the six stages from an image to a report row, how `run` and `reproduce` differ, and the responsibilities of the main components. Implementation details follow for readers tracing the code. Commands and options are in [Run experiments](run-pipeline.md).
 
 ## Calibration data and evaluation data
 
@@ -43,7 +43,7 @@ The statistics determine ranges, scales and zero points. The tool inserts `Quant
 
 RTN rounds each weight to the nearest integer code. AdaRound keeps the RTN encodings and learns whether each weight rounds up or down. A new percentile or scale policy is therefore a new quantization and training condition.
 
-Audits check the QDQ parameters and the graph that ONNX Runtime executes. They also check that no QDQ sits inside a decomposed activation, such as `x * sigmoid(x)`. The audits cover ONNX Runtime behavior only ([Known limitations](validation.md#known-limitations)).
+QDQ checks verify that the intended quantization parameters and boundaries remain in the graph loaded by ONNX Runtime. This helps establish which quantization condition the measured accuracy represents; [Shared validation](#shared-validation) explains the checks.
 
 ## 4. Postprocessing
 
@@ -65,57 +65,89 @@ Reporting reads the saved evaluations and verifies their completion evidence. It
 
 ## run and reproduce
 
-`run` reads an experiment file and performs calibration, quantization and evaluation. `reproduce` evaluates the fixed original models listed in the packaged selection, and an AdaRound condition there selects a model that is already trained. Both share the dataset, model bundle, evaluator, ONNX Runtime and QDQ audit components.
+The two commands answer different questions. `run` measures the accuracy of models created under the experiment settings you choose. `reproduce` evaluates supplied models under their recorded conditions and checks whether repeated execution produces the same outputs. This distinction tells you whether a result describes a quantization experiment or a reevaluation of a fixed model.
 
-In `run`, the experiment file selects models, conditions and percentiles, and the model recipes define inputs and decoders. In `reproduce`, the packaged selection fixes all of these, and `bindings.json` only maps asset locations on your server. [Configuration reference](configuration.md#where-settings-live) lists where each setting lives.
+### What a model bundle contains
 
-`reproduce` does not go through the public Python API. It uses the shared components through these explicit entry points:
+A model bundle groups the files and connections needed to run a model:
 
-| Component | `run` | `reproduce` |
+- `network.onnx`, which performs the prediction computation;
+- optional `preprocess.onnx` and `postprocess.onnx` files for processing around the network;
+- information connecting the inputs and outputs of those graphs.
+
+Not every model needs the optional graphs. Additional Python postprocessing and metric calculation belong to the evaluator. A model recipe describes the input format, preprocessing and how to interpret the outputs. Keeping this information with the network matters because changing preprocessing or output interpretation can change accuracy even when the network file stays the same. File layouts are in [Model bundles and recipes](models-and-data.md#model-bundles-and-recipes).
+
+### Differences that affect result interpretation
+
+The comparison below identifies where the evaluated model comes from, what work the command performs and what its result establishes.
+
+| Aspect | `run` | `reproduce` |
 |---|---|---|
-| Model bundle | `ModelBundle.from_directory()` opens the exported folder and checks it against `model.json` | `replay_bundle()` passes the verified selected graphs and output aliases, and reads no `model.json` |
-| Dataset | The full prepared manifest. Calibration and evaluation use their separate splits | The same manifest or a frozen LFW cache. Full LFW scope is checked before execution in both commands |
-| Evaluation | The public `evaluate()` | Its own loop, which runs each input twice and keeps per-sample evidence |
-| QDQ audit | A separate session of the in-memory model | The session that runs inference |
-| Code identity | `code_identity()` covers every packaged `.py` file. A change stops result reuse | The same identity stops an earlier run from resuming |
-| Process settings | The CLI sets thread variables before numerical imports | One Torch thread and no TF32 during the replay, restored afterwards |
+| Model and settings | Starts from an exported FP32 model bundle. The experiment selects quantization conditions, and the model recipe supplies input and output conventions | Loads the selected FP32 or INT8 files and the recorded recipe, preserving the network and its associated processing |
+| Quantization work | Collects calibration statistics and creates INT8 models. An AdaRound condition learns weight rounding; matching completed work can be reused | Uses the already quantized model. An AdaRound condition selects the already trained file, with no calibration or training during replay |
+| Input data | Uses calibration inputs to create INT8 models and a separate evaluation split to measure accuracy | Uses the recorded evaluation inputs and order; calibration images are not needed for replay |
+| Evaluation and repeatability | Measures accuracy for each experiment condition | Measures accuracy and runs each evaluated input twice in the same session, recording output equality and per-sample evidence |
 
-`reproduce prepare --model-set` and `reproduce configs --model-set` read the model lists of the `core10` and `cnn30` run presets, so editing those lists also changes the sets. `cnn30` is the default for packaged records. `all` uses every entry of the selection manifest. Existing prepared packages keep their original scope.
+For `reproduce`, `bindings.json` maps the recorded assets to locations on your server; it does not choose new quantization or evaluation settings. [Configuration reference](configuration.md#where-settings-live) explains where settings live. Repeating an input within one session checks local repeatability. Agreement with the original measurement or another GPU is a separate comparison described in [Reproducing results](reproducing-results.md#check-agreement-with-the-original-measurements).
 
-## Code map
+### Shared validation
 
-The package lives in `src/opennpu_quant/`.
+The commands share model execution, postprocessing, metric calculation and QDQ checking components. These checks give meaning to the reported accuracy:
 
-### Where to start reading
+- **QDQ parameters and boundaries:** accuracy alone does not establish that the intended quantization was used. For INT8, the checks compare quantized weights, scales and zero points with the quantization record, including the graph loaded by ONNX Runtime. They also verify protected activation boundaries, such as keeping QDQ out of the intermediate computation of `x * sigmoid(x)`. Both paths use the same runtime audit function. Its scope is ONNX Runtime, as explained in [Known limitations](validation.md#known-limitations).
+- **Evaluation conditions:** shared metric code provides a common scoring implementation. Comparing repeated measurements of the same condition still requires matching model files, inputs and order, preprocessing, evaluation profile and sample scope. The saved records identify these conditions and whether evaluation was full or partial; see [How to read a result](validation.md#how-to-read-a-result).
 
-| Question | Start here |
-|---|---|
-| Which execution path does the CLI call? | `cli.py`, `runner.py`, `reproduction/cli.py`, `reproduction/execution.py` |
-| How are settings and asset paths resolved? | `configuration.py`, `paths.py`, `reproduction/assets.py` |
-| What decides reuse and cache keys? | `_identity.py` (code identity and source hashes), `runner.py` (condition and evaluation identities), `quant/storage.py` (statistics cache key), `data/samples.py` (input cache identity), `reproduction/execution.py` (replay identity) |
-| Where are inputs and model conventions defined? | `data/`, `models/`, `resources/models/`, `resources/reproduction/selected.json` |
-| How are statistics, quantization and AdaRound computed? | `api.py` → `quant/`, with graph analysis in `graph/` |
-| Which environment runs ONNX? | `ort/`, `reproduction/environment.py` |
-| Where are predictions and metrics computed? | `models/adapter.py`, `models/extended_decode.py`, `evaluation/` |
-| How do evaluations become tables? | `report.py`, `reproduction/report.py`, then the shared `results.py` and `raw_report.py` |
-| How are source models converted to ONNX? | `export/` |
+<a id="code-map"></a>
+<a id="where-to-start-reading"></a>
 
-The public Python API works without the CLI. `api.quantize` resolves arguments and defaults, `quant/api.py` connects statistics, ranges, the engine and AdaRound, and `quant/engine.py` builds the QDQ graph.
+## Main components and responsibilities
+
+The processing described above is divided into the following components. Module paths are relative to `src/opennpu_quant/`.
+
+| Component | Responsibility | Main modules |
+|---|---|---|
+| Experiment execution | Apply settings and coordinate model creation, evaluation and result storage | `cli.py`, `configuration.py`, `runner.py` |
+| Fixed-model reproduction | Resolve the recorded assets and conditions, then run and record repeatability checks | `reproduction/` |
+| Model preparation | Convert source models to ONNX files | `export/` |
+| Model bundles and recipes | Connect network and host graphs, and define input and output conventions | `models/bundle.py`, `models/spec.py`, `resources/models/` |
+| Data preparation | Read dataset manifests, prepare samples and keep calibration and evaluation inputs separate | `data/` |
+| Quantization | Collect statistics, select ranges, build QDQ models and apply AdaRound | `quant/`, `graph/` |
+| ONNX execution | Create runtime sessions and execute the graphs with the requested device settings | `ort/` |
+| Postprocessing and evaluation | Convert outputs to predictions and accumulate task metrics | `models/adapter.py`, `models/extended_decode.py`, `evaluation/` |
+| Reporting | Validate saved results, pair INT8 with FP32 and produce tables | `report.py`, `reproduction/report.py`, `results.py`, `raw_report.py` |
+
+If needed, the [Python API](api.md) lets you integrate calibration, quantization and evaluation into your own code. `api.py` exposes these operations and delegates to the components above.
+
+## Implementation details
+
+The following sections connect the responsibilities above to concrete functions and execution order. They are useful when tracing or changing the implementation.
 
 ### run call sequence
 
 `cli.py` loads the experiment, applies CLI overrides and validates the result through `configuration.py`. `runner.run()` owns the run directory and creates a `_ModelRun` for each model.
 
 1. Lock the experiment directory and compare `effective_config.json`. A configuration change stops the run unless `--force` is given.
-2. Resolve the recipe and evaluation defaults with `ModelSpec.for_run()`, open the exported model with `ModelBundle.from_directory()` and the dataset manifest with `Dataset`, then build the graph, input and evaluation identities.
+2. Resolve the recipe and evaluation defaults with `ModelSpec.for_run()`, open the exported model with `ModelBundle.from_directory()` and the dataset manifest with `Dataset`, then build the graph, input and evaluation identities. The bundle checks its graph files against `model.json` when that file is present.
 3. For each condition, verify any existing completion evidence and reuse matching results ([Reuse and caching](run-pipeline.md#reuse-and-caching)).
 4. For INT8, collect or load statistics once per model. Build RTN once per scheme family on the calibration device, then apply AdaRound where the condition asks for it.
-5. Audit the QDQ graph that ONNX Runtime executes, run inference and pass the outputs to the shared `ModelEvaluator`.
+5. Audit the QDQ graph, then call `evaluate()` to run inference and pass the outputs to the shared `ModelEvaluator`.
 6. Save the artifacts and metrics, then write `complete.json` with their hashes last.
 
 ### reproduce call sequence
 
-`reproduction/cli.py` sends preparation to `prepare.py` and inference to `execution.py`. Preparation selects the requested models, resolves their assets through the bindings and records each verified condition. Execution loads each prepared model with `replay_bundle()`, runs every input twice to check repeatability and scores the outputs with the shared evaluator, keeping per-sample evidence for resume and comparison.
+`reproduction/cli.py` sends preparation to `prepare.py` and inference to `execution.py`. Preparation selects the requested models, resolves their assets through the bindings and records each verified condition. `replay_bundle()` builds the bundle from verified graph paths, the recorded recipe and output aliases. It reads no `model.json`; the selection records supply the file hashes used for verification.
+
+Execution uses its own inference loop to run each input twice, then scores the outputs with the shared `ModelEvaluator`. Per-sample records support repeatability checks, resume and comparison. This loop handles reproduction-specific recording while reusing the same postprocessing and metric components as `run`.
+
+Model selection for `reproduce prepare --model-set` and `reproduce configs --model-set` reads the `core10` and `cnn30` preset lists, so editing a list changes newly prepared selections. Existing prepared packages retain their scope. Defaults and the `all` option are described in [Choose a model set](reproducing-results.md#choose-a-model-set).
+
+### QDQ audit sessions
+
+In `run`, `runner.runtime_audit()` saves the newly quantized model and opens a separate ONNX Runtime session to inspect its serialized execution graph before evaluation. In `reproduce`, the execution graph comes from the session used for evaluation. Both call `quant.engine.audit_runtime()` to check parameters and protected activation boundaries; the session arrangement reflects where each execution path performs the shared checks.
+
+### Result reuse and resume
+
+Saved results include identities for the model, inputs, settings and implementation. `code_identity()` in `_identity.py` hashes every packaged `.py` file so a code change prevents `run` from reusing an earlier result and `reproduce` from resuming an earlier execution under the same identity. This avoids combining results produced by different implementations. Completion records also check that saved artifacts are intact. See [Reuse and caching](run-pipeline.md#reuse-and-caching) and [Resume an interrupted run](reproducing-results.md#resume-an-interrupted-run).
 
 ### From saved evaluations to tables
 
@@ -127,9 +159,13 @@ The public Python API works without the CLI. `api.quantize` resolves arguments a
 
 `raw_report.py` applies the Excel-compatible table profile. None of these paths runs inference or touches the quantization core.
 
-### Numerical determinism
+<a id="numerical-determinism"></a>
 
-ONNX Runtime always runs with `ORT_DISABLE_ALL`, and CUDA TF32 is disabled. If a requested CUDA execution is unavailable, the tool records a failure or pending work instead of a CPU result. The [GPU environment](reproducing-results.md#gpu-environment-and-numerical-verdicts) section lists what `reproduce` records and compares.
+### Execution environment
+
+The `run` and `reproduce` workflows use `ORT_DISABLE_ALL` and disable CUDA TF32. The CLI configures thread environment variables before importing numerical libraries. When Torch is available, reproduction also sets one Torch thread and disables its TF32 settings for the replay, restoring them afterwards. These settings control execution conditions that can affect numerical results.
+
+If a requested CUDA execution is unavailable, the tool records a failure or pending work. The [GPU environment](reproducing-results.md#gpu-environment-and-numerical-verdicts) section explains how recorded software and GPU information is used when comparing executions.
 
 ### Evaluation profile resolution
 

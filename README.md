@@ -6,7 +6,7 @@ Preprocessing prepares network inputs. Calibration collects FP32 activation stat
 
 ## Requirements
 
-- Linux x86_64 and Python 3.11.13 for the tested setup. Package metadata also permits Python 3.12, which is not covered by the setup and CI checks.
+- Linux x86_64 and Python 3.11.13 for the tested setup.
 - An NVIDIA GPU with a compatible driver for CUDA execution. A system CUDA toolkit is not needed.
 - CPU execution is available for installation and pipeline checks. Its numbers can differ from GPU results.
 
@@ -18,7 +18,7 @@ source .venv/bin/activate
 opennpu-quant info
 ```
 
-`setup.sh` installs Python 3.11.13 and pinned dependencies into `.venv`, using `uv` from `PATH` or a checksum-verified copy in `.tools/`. For CPU checks, use `./setup.sh --device cpu` and pass `--device cpu` below. Re-running setup re-syncs the environment, so repeat the intended device profile. Add `--data` when preparing ImageNet from Hugging Face. The base profiles include LFW alignment dependencies. For additional packages, use the [uv installation commands](docs/models-and-data.md#extra-export-environments) rather than assuming the environment contains pip. The CPU profile uses the CPU provider in the pinned GPU-capable ORT package.
+`setup.sh` installs Python 3.11.13 and pinned dependencies into `.venv`, using `uv` from `PATH` or a checksum-verified copy in `.tools/`. For CPU checks, use `./setup.sh --device cpu` and pass `--device cpu` below. Re-running setup re-syncs the environment, so repeat the intended device profile. Add `--data` when preparing ImageNet from Hugging Face. The base profiles include LFW alignment dependencies. Model-specific export dependencies and their installation commands are listed in [Extra export environments](docs/models-and-data.md#extra-export-environments). The CPU profile uses the CPU provider in the pinned GPU-capable ORT package.
 
 ## Quick start
 
@@ -30,16 +30,15 @@ opennpu-quant demo --device cuda:0
 
 The demo calibrates, quantizes and evaluates a small built-in model without downloading assets.
 
-### 2. Check supplied ONNX models on a few images
+<a id="2-check-supplied-onnx-models-on-a-few-images"></a>
 
-Obtain the model and evaluation assets described in [Bind the assets](docs/reproducing-results.md#bind-the-assets). They are required separately and are not distributed in this Git repository. Copy the bindings template and replace its local paths:
+### 2. Check supplied ONNX models
 
-```bash
-mkdir -p workspace/repro
-cp docs/reproduction-bindings.example.json workspace/repro/bindings.json
-```
+You can download the ONNX files from GitHub Releases.
 
-Start with ResNet-18 and YOLOv5s from `core10`. This checks their saved FP32 and PoT RTN graphs on three images each:
+Prepare the evaluation datasets using the [dataset guide](docs/models-and-data.md#prepare-datasets). Before running the commands below, follow [Set up model and data paths](docs/reproducing-results.md#bind-the-assets) to prepare `workspace/repro/bindings.json`. This configuration file specifies where the downloaded assets are stored.
+
+Start with ResNet-18 and YOLOv5s from `core10`. The example uses three images per model for a quick execution check of their saved FP32 and PoT RTN graphs. You can also evaluate the full dataset for each model:
 
 ```bash
 opennpu-quant reproduce prepare --bindings workspace/repro/bindings.json \
@@ -54,6 +53,8 @@ opennpu-quant reproduce report --run workspace/repro/representative-3-run \
 ```
 
 Check for four ready conditions, four completed conditions and `full: 0 / partial: 4 / excluded: 0`. The results are in `workspace/repro/representative-3-tables/raw_data.partial.csv` and `.tsv`. These scores describe only the three-image subsets.
+
+For full evaluation of the same models and conditions, set `--limit full` in `reproduce prepare` and replace `representative-3` with `representative-full` in all three commands. Use the new package and output directories throughout. A completed full evaluation reports `full: 4 / partial: 0 / excluded: 0` and writes `raw_data.csv` and `.tsv`. The next section evaluates all 30 models.
 
 ### 3. Evaluate all selected conditions
 
@@ -74,12 +75,16 @@ Check **210 ready**, **210 completed**, and **`full: 210 / partial: 0 / excluded
 
 LFW requires all 6,000 pairs. A small request that includes MobileFaceNet stops before any model executes, so specify the representative models for small checks. The [reproduction guide](docs/reproducing-results.md) covers asset checks, storage, resume and comparisons between servers.
 
-## Create new models when needed
+<a id="create-new-models-when-needed"></a>
 
-To regenerate a model from its checkpoint, first prepare data and export FP32, then run calibration, quantization and evaluation. For example:
+## Create new INT8 models
+
+Use this workflow to create an INT8 model from an existing trained checkpoint: prepare the dataset, export FP32 ONNX, collect calibration statistics, then quantize and evaluate. `export resnet18` downloads the pinned pretrained checkpoint and writes the FP32 bundle to `workspace/models/resnet18/`. `run` evaluates FP32 and creates and evaluates the selected INT8 model.
+
+First download and extract ImageNet using the [dataset guide](docs/models-and-data.md#prepare-datasets). The `data prepare` command below checks the local files and writes a manifest; it does not download images. This example uses two calibration images and two evaluation images for a quick execution check:
 
 ```bash
-opennpu-quant data prepare imagenet --root /data/imagenet
+opennpu-quant data prepare imagenet --root /data/imagenet --source folder
 opennpu-quant export resnet18
 opennpu-quant run -c core10 --models resnet18 --conditions fp32,pot_rtn \
   --calibration-samples 2 --limit 2 --device cuda:0 \
@@ -87,7 +92,7 @@ opennpu-quant run -c core10 --models resnet18 --conditions fp32,pot_rtn \
 opennpu-quant report workspace/example-runs/core10 --table-profile opennpu_raw
 ```
 
-ImageNet preparation requires the full source data even for this two-image evaluation. The QDQ model is `workspace/example-runs/core10/resnet18/pot_rtn/model.onnx`, and its partial table is `raw_data.partial.csv` in the experiment directory. See [model and data preparation](docs/models-and-data.md) and [run experiments](docs/run-pipeline.md) for full evaluation and AdaRound training.
+Preparation requires all 50,000 ImageNet validation images and the calibration inputs, even when this example evaluates only two images. With `--save-models`, the generated INT8 QDQ model is saved to `workspace/example-runs/core10/resnet18/pot_rtn/model.onnx`. The report at `workspace/example-runs/core10/raw_data.partial.csv` records FP32 and INT8 accuracy and recovery for the evaluated subset, so you can inspect the effect of quantization. See [model and data preparation](docs/models-and-data.md) and [run experiments](docs/run-pipeline.md) for full evaluation and AdaRound training.
 
 | Preset for `run` | Models | Conditions | Evaluation scope |
 |---|---|---|---|
@@ -98,11 +103,11 @@ A successful fixed-model evaluation verifies the supplied graphs and evaluation 
 
 ## Validation scope
 
-Historical checks cover the supported catalog, and current checks preserve full LFW scoring from saved outputs. They do not establish agreement on every GPU architecture or successful regeneration of every model. See [validation scope](docs/validation.md) for the evidence and limits.
+Assess execution completion, reference agreement and benchmark accuracy separately. Benchmark accuracy requires full evaluation of each selected model and condition. For LFW, use all 6,000 pairs. Rescoring saved outputs checks postprocessing and metric calculation; verifying inference on a new GPU or newly generated INT8 models requires a new evaluation. See [validation scope](docs/validation.md) for the evidence and limits.
 
 ## Python API
 
-The quantization core works without the CLI:
+The Python API is available when you need to integrate quantization into your own Python workflow. With an FP32 model and a calibration input function prepared:
 
 ```python
 from opennpu_quant import OrtConfig, Scheme, calibrate, quantize, save_model
@@ -114,7 +119,7 @@ result = quantize(model, stats, scheme, ort=ort)
 save_model(result.model, "model_int8.onnx")
 ```
 
-`feeds` is a function that returns a fresh iterator of input dictionaries. See the [Python API guide](docs/api.md) for a complete example.
+`feeds` supplies preprocessed calibration inputs as dictionaries mapping model input names to NumPy arrays. Pass the function itself; each call must return a fresh iterator with the same values and order, because calibration reads the inputs twice. See the [Python API guide](docs/api.md) for a complete example.
 
 ## Documentation
 

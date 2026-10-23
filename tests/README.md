@@ -27,6 +27,12 @@ Use `./.tools/uv` if setup installed uv locally. Tests that need Torch, Torchvis
 | `fixtures/opennpu_raw_format.json` | Columns, display names and schemes of the 15-column table |
 | `library_fixtures.py` | A toy model and feeds shared by tests |
 
+## Documented API compatibility
+
+The API guide imports model and dataset helpers from their implementation modules. These names are not exported by the top-level `opennpu_quant` package, but the documented imports are part of the examples users rely on. `test_documented_internal_imports_keep_their_signatures` checks both the complete set of these imports and their signatures against `fixtures/documented_internals.json`. Keep the fixture in sync when intentionally adding a documented helper, and review compatibility before changing a listed signature.
+
+The Python postprocessing example uses `ModelEvaluator` and `resolve` as extension points. Behavioral tests in `test_evaluation_contracts.py` also check execution order, argument forwarding, reuse of the existing metric, and the flags that exclude custom postprocessing from automatic result reuse and original-measurement reproduction. The basic package import is checked separately to ensure that it creates no files and does not load numerical runtimes.
+
 ## What each file covers
 
 ### Quantization core
@@ -74,6 +80,7 @@ Use `./.tools/uv` if setup installed uv locally. Tests that need Torch, Torchvis
 | File | Covers |
 |---|---|
 | `test_portable.py` | End-to-end local run with resume, reuse and tampering, statistics relocation, downloads and archives, checkout cleanup and ImageNet preparation |
+| `test_dataset_download.py` | COCO/VOC downloads from small local archives, CLI preparation, keypoint inputs, VOC layout, reuse and missing-file repair, checksums, conflicting files, unsafe archives and existing manifest validation |
 | `test_result_reliability.py` | Result reuse evidence, invalidation by graph or data changes, forced recompute, stale files, original errors, undefined primary metric |
 | `test_cache_concurrency.py` | Concurrent input and statistics readers, one input-cache builder, waiting writers, failure recovery, process exit, interruption and integrity checks after waiting |
 | `test_recalibrate.py` | `--recalibrate` generations, partial and interrupted runs, the source files in the statistics cache key |

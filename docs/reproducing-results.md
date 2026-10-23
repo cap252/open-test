@@ -1,6 +1,8 @@
 # Reproduce the original measurements
 
-This guide is for holders of the original assets: the FP32/INT8 ONNX files, records and data manifests of the original measurements. These assets are not distributed with this repository. Without them, use `run` to create and evaluate new INT8 models, starting from the [quick start](../README.md#quick-start).
+You can download the ONNX files from GitHub Releases.
+
+This guide uses the FP32/INT8 ONNX files, records and data manifests of the original measurements. Obtain evaluation datasets using the [dataset download guide](models-and-data.md#prepare-datasets), and prepare the files and path settings listed below. With prepared data and an FP32 model, you can use `run` to create and evaluate new INT8 models independently of the original measurement assets ([quick start](../README.md#quick-start)).
 
 ## What this workflow does
 
@@ -10,7 +12,9 @@ The packaged selection (`selected.json`) supplies each condition's percentile, e
 
 ## Bind the assets
 
-`reproduce` does not download anything. The packaged selection identifies each required file by ID and SHA256 hash, and a bindings file tells the tool where those files live on your server.
+Prepare the model files, companion records and datasets before this step; `reproduce` does not download them. The packaged selection identifies each required file by ID and SHA256 hash. The bindings file maps those asset groups to local directories, so users with different storage locations can run the same models and data. Copy the template below, then edit its path values.
+
+`reproduce prepare` verifies these existing assets and creates an execution package. It is separate from `data prepare`, which creates dataset manifests for new experiments.
 
 ```bash
 mkdir -p workspace/repro
@@ -158,7 +162,7 @@ PY
 - `original_accuracy.metrics_state` compares the metrics with the original values within numerical tolerance.
 - `bitwise_equal` in `original_accuracy.metrics` records exact equality for each metric. `metrics_bitwise_equal` requires all expected metrics to be present, non-conflicting and bitwise equal. A numerical-tolerance pass alone does not establish this.
 - Metric checks compare metrics with the same name and record `actual_paths` and `expected_paths`. The one documented exception is segmentation `pixel_accuracy`, which the evaluator stores in `metric_details` and the check reads there when the reference keeps it under `metrics`. Conflicting duplicate fields fail.
-- Tasks that support it also compare the hash of the complete prediction stream. Classification, semantic segmentation and face verification may leave this `pending` because of the original prediction format.
+- Tasks that support it also compare the hash of the complete prediction stream. A differing hash leaves `prediction_stream` as `pending`, even if metrics pass, because a hash cannot show the size of a numerical difference. Classification, semantic segmentation and face verification may also leave this `pending` because of the original prediction format.
 - `not_recorded` means that the field was not saved, not that the values differ.
 
 A `completed` state or the right number of CSV rows does not establish agreement ([How to read a result](validation.md#how-to-read-a-result)). When a condition fails or differs, read `original_accuracy` in its `result.json` or `error` in `run.json`. If FP32 also differs, compare the model, inputs, environment and profile first. If only INT8 differs, also check the selected model files, percentiles and QDQ audits.
@@ -167,7 +171,7 @@ A `completed` state or the right number of CSV rows does not establish agreement
 
 Repeat only `reproduce run` with the same package, bindings, device, storage mode and package version. There is no need to run `prepare` again. Completed conditions are reused after their files and identity are verified.
 
-Within an interrupted condition, completed samples are fed to the evaluator again. With `--storage predictions`, those samples are also inferred again to verify their raw hashes, because the tensors were not kept.
+Within an interrupted condition, completed samples are fed to the evaluator again. With `--storage predictions`, those samples are also inferred again to verify their raw hashes, because the tensors were not kept. A changed output hash fails this resume check, even for a 1 ULP difference; it checks continuity with the saved execution.
 
 Which directories must be new depends on what changed:
 
@@ -197,15 +201,18 @@ The reference environment uses CUDA runtime **12.4.127**, cuBLAS **12.4.5.8**, c
 
 The environment identity is recorded after the Torchvision libraries used for CPU postprocessing are loaded, so model order and lazy loading do not change it. In these records, `not_loaded` and `content_changed` are different states.
 
+Hashes establish that the recorded model files, inputs and saved artifacts are unchanged. Output agreement uses the separate rules below, so a hash check is not itself a numerical tolerance test.
+
 | Comparison | Verdict |
 |---|---|
-| Two executions on the same GPU | Bitwise equality |
-| Raw outputs across GPUs | Matching shape, dtype and finite values, and elementwise tolerance `1e-5 + 1e-4 × abs(reference)` |
+| Recorded model and input identity | Exact hash match; changed files or input tensors do not represent the same measurement conditions |
+| The same input run twice in the same ONNX Runtime session | Bitwise equality; a 1 ULP output difference fails the repeatability check |
+| Raw outputs across GPUs, with both tensors retained | Matching shape, dtype and finite values, and elementwise tolerance `1e-5 + 1e-4 × abs(reference)` |
+| Raw-output comparison with only hashes available | Equal hashes establish byte equality. Different hashes leave the raw verdict `pending` because tensors are needed to assess tolerance |
 | Final predictions | Matching detection counts, classes, order, labels and masks, with numerical tolerance for coordinates and scores |
 | Metrics | Per-metric numerical comparison, with bitwise results recorded separately |
 
-
-A raw-output pass does not replace the prediction and metric verdicts. `within_tolerance_nonbitwise` marks tensors that pass the tolerance but differ in bytes, and records the model, condition, sample, tensor and maximum error. Without reference outputs, or without two distinct GPUs, cross-GPU reproduction cannot be established.
+A 1 ULP difference in FP32 outputs across GPUs can pass the raw-output tolerance check. `within_tolerance_nonbitwise` marks tensors that pass the tolerance but differ in bytes, and records the model, condition, sample, tensor and maximum error. Predictions, metrics and environment compatibility are checked separately: changed labels or masks, or an environment mismatch such as differing software versions, can still fail the comparison. Cross-GPU acceptance requires reference evidence and two verified, distinct GPUs.
 
 ## Files written by reproduce
 

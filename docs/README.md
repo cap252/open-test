@@ -16,7 +16,7 @@ Start with the [README](../README.md) to install the tool, run the demo, check s
 
 | Page | Contents |
 |---|---|
-| [Configuration reference](configuration.md) | Every experiment key, its default and what changing it affects |
+| [Configuration reference](configuration.md) | Choose a preset, configure multiple models, locate settings and look up detailed options |
 | [Model reference](model-reference.md) | Inputs, preprocessing, decoders, model groups and original settings for every packaged model |
 | [Evaluation profiles](evaluation-profiles.md) | Model-specific postprocessing behavior and how to compare alternatives |
 | [Validation scope and limitations](validation.md) | How to read a result, what has been verified and known limitations |
@@ -25,5 +25,5 @@ Start with the [README](../README.md) to install the tool, run the demo, check s
 
 | Page | Contents |
 |---|---|
-| [How opennpu-quant works](architecture.md) | The six stages from an image to a report row, how `run` and `reproduce` share components, and a map of the code |
+| [How opennpu-quant works](architecture.md) | The processing stages, the purpose of `run` and `reproduce`, shared validation, component responsibilities and implementation details |
 | [Quantization logic](quantization.md) | Calibration, range selection, scales, QDQ construction and AdaRound |

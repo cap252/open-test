@@ -38,11 +38,19 @@ def prepare(name, root, destination, *, source="folder", download=False):
     if name not in COUNTS:
         raise ValueError("Unknown dataset")
     if download:
-        if name != "imagenet" or source != "hf":
-            raise ValueError(
-                "Automatic download is currently available for ImageNet HF; use documented official archives for this dataset"
+        if name in ("coco", "coco_keypoints", "voc"):
+            from .download import download_dataset
+
+            download_dataset(
+                name, root, calibration=identifiers(name), expected_samples=COUNTS[name]
             )
-        download_imagenet(root)
+        elif name == "imagenet" and source == "hf":
+            download_imagenet(root)
+        else:
+            raise ValueError(
+                "--download supports COCO, COCO keypoints, VOC2012, LFW and "
+                "ImageNet with --source hf; prepare other datasets from local files"
+            )
     annotations = {}
     # Dataset byte equivalence requires independent verification, not matching names.
     reference = False

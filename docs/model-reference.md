@@ -21,7 +21,7 @@ The shapes come from the FP32 ONNX files referenced by the packaged selection ([
 - **Recipe input** is the output of Python preprocessing. **Network input** is the actual feed after any CPU pre graph and input mapping. All network feeds are float32, and shapes include batch 1.
 - `f32` is float32, `u8` is uint8, and H/W are symbolic spatial dimensions. When a recipe does not declare a dtype, the external dtype comes from the preprocessing implementation.
 - In the host column, `pre` and `post` are CPU ONNX graphs. Python decoders and evaluators run in addition to them.
-- The last column ends with the stored profile ID: `N` = `numpy_argsort_v1`, `H` = `historical_cnn33_v1`, `C` = `current_v1`. [Evaluation profiles](evaluation-profiles.md#default-profile-per-model) lists the behavior each one selects.
+- The last column lists the CPU host graphs, decoder kind and default evaluation profile. [Evaluation profiles](evaluation-profiles.md#default-profile-per-model) explains the behavior selected by each profile.
 - ImageNet mean/std is `[0.485,0.456,0.406]` / `[0.229,0.224,0.225]`. MMSeg uses `[123.675,116.28,103.53]` / `[58.395,57.12,57.375]`. NanoDet uses BGR `[103.53,116.28,123.675]` / `[57.375,57.12,58.395]`, divided by 255 in the original order.
 
 ## Classification
@@ -30,19 +30,19 @@ Dataset ImageNet, metrics top1 and top5.
 
 | Model ID | Group | Recipe input shape / dtype / layout | Actual network shape / dtype / layout | Spatial dimensions / feed | Preprocessing | CPU host / decoder / profile |
 |---|---|---|---|---|---|---|
-| `resnet18` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / N |
-| `resnet50` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / N |
-| `resnet101` | cnn30 additional | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / N |
-| `mobilenet_v1` | cnn30 additional | 1×3×256×256 / f32 / NCHW | 1×3×256×256 / f32 / NCHW | Fixed | short side 269 → crop256, bicubic, /255 + mean/std=0.5 | none / `logits` / N |
-| `mobilenet_v2` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / N |
-| `mobilenet_v3_large` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / N |
-| `efficientnet_b0` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bicubic, /255 + ImageNet mean/std | none / `logits` / N |
-| `efficientnet_lite4` | cnn30 additional | 1×3×380×380 / f32 / NCHW | 1×3×380×380 / f32 / NCHW | Fixed | short side 413 → crop380, bilinear, /255 + mean/std=0.5 | none / `logits` / N |
-| `squeezenet1_1` | cnn30 additional | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / N |
-| `shufflenet_v2_x1_0` | cnn30 additional | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / N |
-| `vgg16` | cnn30 additional | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / N |
-| `inception_v3` | core10 | 1×3×299×299 / f32 / NCHW | 1×3×299×299 / f32 / NCHW | Fixed | short side 342 → crop299, bilinear, /255 + ImageNet mean/std | pre / `logits` / N |
-| `efficientnet_lite0` | additional support | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bicubic, /255 + mean/std=0.5 | none / `logits` / N |
+| `resnet18` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / `numpy_topk_v1` |
+| `resnet50` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / `numpy_topk_v1` |
+| `resnet101` | cnn30 additional | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / `numpy_topk_v1` |
+| `mobilenet_v1` | cnn30 additional | 1×3×256×256 / f32 / NCHW | 1×3×256×256 / f32 / NCHW | Fixed | short side 269 → crop256, bicubic, /255 + mean/std=0.5 | none / `logits` / `numpy_topk_v1` |
+| `mobilenet_v2` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / `numpy_topk_v1` |
+| `mobilenet_v3_large` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / `numpy_topk_v1` |
+| `efficientnet_b0` | core10 | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bicubic, /255 + ImageNet mean/std | none / `logits` / `numpy_topk_v1` |
+| `efficientnet_lite4` | cnn30 additional | 1×3×380×380 / f32 / NCHW | 1×3×380×380 / f32 / NCHW | Fixed | short side 413 → crop380, bilinear, /255 + mean/std=0.5 | none / `logits` / `numpy_topk_v1` |
+| `squeezenet1_1` | cnn30 additional | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / `numpy_topk_v1` |
+| `shufflenet_v2_x1_0` | cnn30 additional | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / `numpy_topk_v1` |
+| `vgg16` | cnn30 additional | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bilinear, /255 + ImageNet mean/std | none / `logits` / `numpy_topk_v1` |
+| `inception_v3` | core10 | 1×3×299×299 / f32 / NCHW | 1×3×299×299 / f32 / NCHW | Fixed | short side 342 → crop299, bilinear, /255 + ImageNet mean/std | pre / `logits` / `numpy_topk_v1` |
+| `efficientnet_lite0` | additional support | 1×3×224×224 / f32 / NCHW | 1×3×224×224 / f32 / NCHW | Fixed | short side 256 → crop224, bicubic, /255 + mean/std=0.5 | none / `logits` / `numpy_topk_v1` |
 
 ## Object detection
 
@@ -50,21 +50,21 @@ Dataset COCO, metrics AP, AP50 and AP75.
 
 | Model ID | Group | Recipe input shape / dtype / layout | Actual network shape / dtype / layout | Spatial dimensions / feed | Preprocessing | CPU host / decoder / profile |
 |---|---|---|---|---|---|---|
-| `yolov3_tiny` | cnn30 additional | 1×3×416×416 / f32 / NCHW | 1×3×416×416 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / C |
-| `yolov4_tiny` | cnn30 additional | 1×3×416×416 / f32 / NCHW | 1×3×416×416 / f32 / NCHW | Fixed | RGB 416² stretch resize, /255 | post / `yolov4` / C |
-| `yolov5n` | cnn30 additional | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / C |
-| `yolov5s` | core10 | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / C |
-| `yolov7_tiny` | cnn30 additional | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / C |
-| `yolov8n` | cnn30 additional | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo_no_objectness` / C |
-| `ssd_mobilenet_v2_320` | core10 | 1×320×320×3 / u8 / NHWC | 1×3×300×300 / f32 / NCHW | Fixed | RGB resize, uint8 → CPU pre graph | pre/post / `tf_od_api` / C |
-| `nanodet_plus_m_320` | cnn30 additional | 1×3×320×320 / f32 / NCHW | 1×3×320×320 / f32 / NCHW | Fixed | BGR warpPerspective, /255, then normalize with mean/255 and std/255 | post / `nanodet` / C |
-| `retinanet_resnet50_fpn` | cnn30 additional | 1×3×800×800 / f32 / NCHW | 1×3×800×800 / f32 / NCHW | Fixed | RGB 800² stretch resize, /255 | pre/post / `retinanet` / C |
-| `yolov9_t` | additional support | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB stride32 letterbox, /255, rectangular | post / `yolo_no_objectness` / H |
-| `yolox` | cnn30 additional | 1×3×640×640 / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / fixed 640 feed | BGR keep-ratio, top-left placement, pad114, 0–255 float32 | post / `yolo` / H |
-| `yolov3_full` | additional support | 1×3×416×416 / f32 / NCHW | 1×3×416×416 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / C |
-| `yolov4_full` | additional support | 1×3×416×416 / f32 / NCHW | 1×3×416×416 / f32 / NCHW | Fixed | RGB 416² stretch resize, /255 | post / `yolov4` / C |
-| `yolov7_full` | additional support | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / C |
-| `yolov9_s` | additional support | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB stride32 letterbox, /255, rectangular | post / `yolo_no_objectness` / H |
+| `yolov3_tiny` | cnn30 additional | 1×3×416×416 / f32 / NCHW | 1×3×416×416 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / `yolo_opencv_nms_v1` |
+| `yolov4_tiny` | cnn30 additional | 1×3×416×416 / f32 / NCHW | 1×3×416×416 / f32 / NCHW | Fixed | RGB 416² stretch resize, /255 | post / `yolov4` / `yolov4_opencv_nms_v1` |
+| `yolov5n` | cnn30 additional | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / `yolo_opencv_nms_v1` |
+| `yolov5s` | core10 | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / `yolo_opencv_nms_v1` |
+| `yolov7_tiny` | cnn30 additional | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / `yolo_opencv_nms_v1` |
+| `yolov8n` | cnn30 additional | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo_no_objectness` / `yolo_scores_opencv_nms_v1` |
+| `ssd_mobilenet_v2_320` | core10 | 1×320×320×3 / u8 / NHWC | 1×3×300×300 / f32 / NCHW | Fixed | RGB resize, uint8 → CPU pre graph | pre/post / `tf_od_api` / `tf_od_api_v1` |
+| `nanodet_plus_m_320` | cnn30 additional | 1×3×320×320 / f32 / NCHW | 1×3×320×320 / f32 / NCHW | Fixed | BGR warpPerspective, /255, then normalize with mean/255 and std/255 | post / `nanodet` / `nanodet_v1` |
+| `retinanet_resnet50_fpn` | cnn30 additional | 1×3×800×800 / f32 / NCHW | 1×3×800×800 / f32 / NCHW | Fixed | RGB 800² stretch resize, /255 | pre/post / `retinanet` / `retinanet_host_nms_v1` |
+| `yolov9_t` | additional support | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB stride32 letterbox, /255, rectangular | post / `yolo_no_objectness` / `yolov9_torch_nms_v1` |
+| `yolox` | cnn30 additional | 1×3×640×640 / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / fixed 640 feed | BGR keep-ratio, top-left placement, pad114, 0–255 float32 | post / `yolo` / `yolox_torch_nms_v1` |
+| `yolov3_full` | additional support | 1×3×416×416 / f32 / NCHW | 1×3×416×416 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / `yolo_opencv_nms_v1` |
+| `yolov4_full` | additional support | 1×3×416×416 / f32 / NCHW | 1×3×416×416 / f32 / NCHW | Fixed | RGB 416² stretch resize, /255 | post / `yolov4` / `yolov4_opencv_nms_v1` |
+| `yolov7_full` | additional support | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | RGB letterbox, pad114, /255 | post / `yolo` / `yolo_opencv_nms_v1` |
+| `yolov9_s` | additional support | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB stride32 letterbox, /255, rectangular | post / `yolo_no_objectness` / `yolov9_torch_nms_v1` |
 
 ## Face detection
 
@@ -72,8 +72,8 @@ Dataset WIDER FACE, primary metric AP_medium.
 
 | Model ID | Group | Recipe input shape / dtype / layout | Actual network shape / dtype / layout | Spatial dimensions / feed | Preprocessing | CPU host / decoder / profile |
 |---|---|---|---|---|---|---|
-| `retinaface_mnet025_640` | core10 | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | BGR resize, subtract mean[104,117,123] | post / `retinaface` / C |
-| `yolov7_face` | cnn30 additional | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB stride32 letterbox, /255, auto padding | post / `yolo_face` / H |
+| `retinaface_mnet025_640` | core10 | 1×3×640×640 / f32 / NCHW | 1×3×640×640 / f32 / NCHW | Fixed | BGR resize, subtract mean[104,117,123] | post / `retinaface` / `retinaface_v1` |
+| `yolov7_face` | cnn30 additional | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB stride32 letterbox, /255, auto padding | post / `yolo_face` / `yolov7_face_clip_first4_v1` |
 
 ## Pose estimation
 
@@ -81,7 +81,7 @@ Dataset COCO keypoints, metric keypoint AP.
 
 | Model ID | Group | Recipe input shape / dtype / layout | Actual network shape / dtype / layout | Spatial dimensions / feed | Preprocessing | CPU host / decoder / profile |
 |---|---|---|---|---|---|---|
-| `posenet_101` | additional support | 1×3×513×513 / f32 / NCHW | 1×3×513×513 / f32 / NCHW | Fixed | 513² resize, RGB ×(2/255)−1 | post / `posenet` / C |
+| `posenet_101` | additional support | 1×3×513×513 / f32 / NCHW | 1×3×513×513 / f32 / NCHW | Fixed | 513² resize, RGB ×(2/255)−1 | post / `posenet` / `posenet_multi_pose_v1` |
 
 ## Semantic segmentation
 
@@ -89,11 +89,11 @@ Dataset VOC2012, metric mIoU.
 
 | Model ID | Group | Recipe input shape / dtype / layout | Actual network shape / dtype / layout | Spatial dimensions / feed | Preprocessing | CPU host / decoder / profile |
 |---|---|---|---|---|---|---|
-| `deeplabv3_mnv2_voc` | core10 | 1×513×513×3 / f32 / NHWC | 1×513×513×3 / f32 / NHWC | Fixed | long side 513, (RGB−127.5)/127.5, bottom/right 0 pad | post / `segmentation_labels` / C |
-| `unet_resnet50_voc` | cnn30 additional | 1×3×512×512 / f32 / NCHW | 1×3×512×512 / f32 / NCHW | Fixed | BICUBIC letterbox512, pad128, /255 | none / `segmentation_resize` / C |
-| `deeplabv3_r50_voc` | cnn30 additional | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB keep-ratio ≤2048×512, mean/std(0–255) | none / `segmentation_resize` / C |
-| `fcn_r50_voc` | cnn30 additional | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB keep-ratio ≤2048×512, mean/std(0–255) | none / `segmentation_resize` / C |
-| `deeplabv3plus_r50_voc` | additional support | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB keep-ratio ≤2048×512, mean/std(0–255) | none / `segmentation_resize` / C |
+| `deeplabv3_mnv2_voc` | core10 | 1×513×513×3 / f32 / NHWC | 1×513×513×3 / f32 / NHWC | Fixed | long side 513, (RGB−127.5)/127.5, bottom/right 0 pad | post / `segmentation_labels` / `segmentation_labels_v1` |
+| `unet_resnet50_voc` | cnn30 additional | 1×3×512×512 / f32 / NCHW | 1×3×512×512 / f32 / NCHW | Fixed | BICUBIC letterbox512, pad128, /255 | none / `segmentation_resize` / `segmentation_resize_v1` |
+| `deeplabv3_r50_voc` | cnn30 additional | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB keep-ratio ≤2048×512, mean/std(0–255) | none / `segmentation_resize` / `segmentation_resize_v1` |
+| `fcn_r50_voc` | cnn30 additional | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB keep-ratio ≤2048×512, mean/std(0–255) | none / `segmentation_resize` / `segmentation_resize_v1` |
+| `deeplabv3plus_r50_voc` | additional support | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB keep-ratio ≤2048×512, mean/std(0–255) | none / `segmentation_resize` / `segmentation_resize_v1` |
 
 ## Instance segmentation
 
@@ -101,7 +101,7 @@ Dataset COCO, metric mask_AP. Box AP and mask AP are separate metrics.
 
 | Model ID | Group | Recipe input shape / dtype / layout | Actual network shape / dtype / layout | Spatial dimensions / feed | Preprocessing | CPU host / decoder / profile |
 |---|---|---|---|---|---|---|
-| `yolov5s_seg` | cnn30 additional | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB stride32 letterbox, /255, rectangular | post / `yolo_seg` / H |
+| `yolov5s_seg` | cnn30 additional | 1×3×H×W / f32 / NCHW | 1×3×H×W / f32 / NCHW | Variable ONNX / variable feed | RGB stride32 letterbox, /255, rectangular | post / `yolo_seg` / `yolov5_seg_scaled_coeff_bbox_area_v1` |
 
 ## Face verification
 
@@ -109,17 +109,17 @@ Dataset LFW, metric verification_accuracy.
 
 | Model ID | Group | Recipe input shape / dtype / layout | Actual network shape / dtype / layout | Spatial dimensions / feed | Preprocessing | CPU host / decoder / profile |
 |---|---|---|---|---|---|---|
-| `mobilefacenet_relu_foamliu` | cnn30 additional | 1×3×112×112 / f32 / NCHW | 1×3×112×112 / f32 / NCHW | Fixed | aligned 112², RGB /255 → ImageNet mean/std | none / `face_verification` / C |
+| `mobilefacenet_relu_foamliu` | cnn30 additional | 1×3×112×112 / f32 / NCHW | 1×3×112×112 / f32 / NCHW | Fixed | aligned 112², RGB /255 → ImageNet mean/std | none / `face_verification` / `lfw_flip_ten_fold_v1` |
 
 ## Decoder and evaluation settings
 
 | Model/family | Confidence / NMS IoU / count | Restoration, scoring and where it is set |
 |---|---|---|
 | YOLOv3/Tiny, YOLOv5n/s, YOLOv7/Tiny, YOLOv8n | 0.001 / 0.6 / 300, 30000 candidates | Recipe `decode`. Contiguous COCO 80-class indices map to annotation category IDs. v8 has no objectness |
-| YOLOv9-T/S | 0.001 / 0.7 / 300, 30000 candidates | Recipe `decode` + H profile. Preserve original bbox/score serialization |
-| YOLOX | 0.001 / 0.65 / no global cap under H | H follows original behavior even with max300 in the recipe. Cap/clipping changes define a separate convention |
-| YOLOv7-face | 0.01 / 0.5 / no final cap under H, 30000 candidates | Recipe `decode` + H. Original NMS/clipping without the recipe's max300, landmark separation and WIDER xywh restoration |
-| YOLOv5s-seg | 0.001 / 0.6 / 300, 30000 candidates | Recipe `decode` + H. Mask coefficient/prototype reconstruction and bbox-area COCO mask AP |
+| YOLOv9-T/S | 0.001 / 0.7 / 300, 30000 candidates | Recipe `decode` + `yolov9_torch_nms_v1`. Preserve original bbox/score serialization |
+| YOLOX | 0.001 / 0.65 / no global cap with the default profile | `yolox_torch_nms_v1` follows original behavior even with max300 in the recipe. Cap/clipping changes define a separate convention |
+| YOLOv7-face | 0.01 / 0.5 / no final cap with the default profile, 30000 candidates | Recipe `decode` + `yolov7_face_clip_first4_v1`. Original NMS/clipping without the recipe's max300, landmark separation and WIDER xywh restoration |
+| YOLOv5s-seg | 0.001 / 0.6 / 300, 30000 candidates | Recipe `decode` + `yolov5_seg_scaled_coeff_bbox_area_v1`. Mask coefficient/prototype reconstruction and bbox-area COCO mask AP |
 | YOLOv4/Tiny | 0.001 / 0.6 / 300 | Fixed in `extended_decode.py`. Restore normalized boxes from 416 coordinates using FP64 coordinate arithmetic |
 | NanoDet | 0.05 / 0.6 / 100 | Fixed in `extended_decode.py`. DFL with 8 bins and strides 8/16/32/64, restored from 320 coordinates |
 | RetinaFace | 0.02 / 0.4 / 750 | Recipe priors/min_sizes/steps/variance and thresholds. Medium is the primary WIDER easy/medium/hard metric |
@@ -130,7 +130,7 @@ Dataset LFW, metric verification_accuracy.
 | TF DeepLab | host labels → crop valid area → restore labels | Do not replace label-map resizing with logit resizing |
 | MobileFaceNet ReLU | sum original+flip embeddings → FP32 L2 normalization | Ten-fold threshold selection for `verification_accuracy`, plus `fixed_angle_accuracy` at 74.18°. Requires all 6,000 pairs ([LFW](models-and-data.md#lfw)) |
 
-Values described as fixed cannot be overridden from YAML or the CLI. The NMS details and profile exceptions are part of the decoder code as well as the recipe numbers, and [Changing preserved behavior](evaluation-profiles.md#changing-preserved-behavior) explains what a change involves.
+Values described as fixed cannot be overridden from YAML or the CLI. The NMS details and profile exceptions are part of the decoder code as well as the recipe numbers. See [Compare against another profile](evaluation-profiles.md#compare-against-another-profile) for how profile choices affect evaluation comparisons.
 
 ## Notes on specific models
 

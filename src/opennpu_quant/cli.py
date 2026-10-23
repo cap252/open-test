@@ -238,7 +238,7 @@ def build_parser():
     prepare = data_commands.add_parser(
         "prepare",
         help="Prepare a dataset manifest",
-        description="Prepare image manifests. LFW also writes aligned face crops.",
+        description="Prepare image manifests, optionally downloading supported datasets. LFW also writes aligned face crops.",
     )
     prepare.add_argument(
         "dataset",
@@ -247,7 +247,9 @@ def build_parser():
     )
     _path_options(prepare)
     prepare.add_argument(
-        "--root", required=True, help="Dataset folder containing the existing images"
+        "--root",
+        required=True,
+        help="Dataset folder containing existing images or receiving --download inputs. For VOC, this folder contains JPEGImages directly",
     )
     prepare.add_argument(
         "--source",
@@ -258,7 +260,7 @@ def build_parser():
     prepare.add_argument(
         "--download",
         action="store_true",
-        help="Download ImageNet (--source hf) or pinned LFW assets explicitly",
+        help="Download and extract COCO 2017 (including keypoints), VOC2012, ImageNet (--source hf) or pinned LFW assets",
     )
     prepare.set_defaults(handler=_data_prepare)
     status = data_commands.add_parser(

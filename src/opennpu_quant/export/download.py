@@ -32,7 +32,7 @@ def download(url, destination, *, sha256_expected):
     return destination
 
 
-def extract_archive(archive, destination):
+def extract_archive(archive, destination, *, text_links=None):
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
 
@@ -44,10 +44,20 @@ def extract_archive(archive, destination):
 
     if zipfile.is_zipfile(archive):
         with zipfile.ZipFile(archive) as z:
+            allowed = text_links or {}
+            found = set()
             for member in z.infolist():
                 checked(member.filename)
                 if (member.external_attr >> 16) & 0o170000 == 0o120000:
-                    raise ValueError("Archive links are not supported")
+                    if (
+                        member.filename not in allowed
+                        or z.read(member) != allowed[member.filename].encode()
+                    ):
+                        raise ValueError("Archive links are not supported")
+                    found.add(member.filename)
+            if found != set(allowed):
+                raise ValueError("Expected archive documentation links changed")
+            # ZipFile extracts link payloads as ordinary files, never as symlinks.
             z.extractall(destination)
     else:
         with tarfile.open(archive) as t:

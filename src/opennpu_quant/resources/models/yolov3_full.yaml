@@ -37,6 +37,7 @@ source:
   archive_sha256: 37511916f3b76e5deb202f6e5e27ad4f0360bf4d22da972a5fbd1e3a0b24d90c
 export:
   family: yolov3
-  opset: 18
+  opset: 17
   simplify: false
   split_detector: true
+  fold_constant_floors: true

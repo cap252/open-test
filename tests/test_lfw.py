@@ -433,3 +433,33 @@ class LfwAlignmentDependencyTests(unittest.TestCase):
         )
         actual = align_mobilefacenet(image, points.T.reshape(-1))
         self.assertEqual(image.tobytes(), actual.tobytes())
+
+    def test_shared_annotation_reader_rejects_changed_pins_and_duplicate_keys(self):
+        from opennpu_quant.data.lfw import read_annotations
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            pairs = write_pairs(root / "pairs.txt")
+            row = dict(full_path="lfw_funneled/A/A_0001.jpg", landmarks=[1.0] * 10)
+            atomic_json(root / "lfw_funneled.json", dict(samples=[row]))
+            with (
+                patch("opennpu_quant.data.lfw.PAIR_HASH", sha256(root / "pairs.txt")),
+                patch(
+                    "opennpu_quant.data.lfw.LANDMARK_HASH",
+                    sha256(root / "lfw_funneled.json"),
+                ),
+            ):
+                self.assertEqual(
+                    (pairs, {"A/A_0001.jpg": row["landmarks"]}), read_annotations(root)
+                )
+                atomic_json(root / "lfw_funneled.json", dict(samples=[row, row]))
+                with self.assertRaisesRegex(ValueError, "changed: lfw_funneled.json"):
+                    read_annotations(root)
+                with (
+                    patch(
+                        "opennpu_quant.data.lfw.LANDMARK_HASH",
+                        sha256(root / "lfw_funneled.json"),
+                    ),
+                    self.assertRaisesRegex(ValueError, "Duplicate LFW landmark key"),
+                ):
+                    read_annotations(root)

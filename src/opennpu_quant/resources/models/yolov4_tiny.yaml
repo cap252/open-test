@@ -42,7 +42,7 @@ source:
 export:
   family: yolov4
   opset: 18
-  simplify: false
+  simplify: true
   outputs:
   - boxes
   - scores

@@ -170,14 +170,14 @@ def export_model(recipe, weight, source, feeds, target, *, fixture_images=None):
             from .extended_torch import static_same
 
             model = static_same(model, feeds)
-        if recipe["export"]["family"] == "yolov3":
-            from .extended_torch import fixed_nearest_upsample
-
-            model = fixed_nearest_upsample(model, feeds)
         if recipe["export"]["family"] == "yolov7_face":
             from .extended_torch import dynamic_face_grids
 
             model = dynamic_face_grids(model, feeds)
+        if recipe["name"] == "yolov7_full":
+            from .extended_torch import dynamic_face_grids
+
+            model = dynamic_face_grids(model, feeds, ("Detect", "IDetect"))
         dynamic = None
         if recipe["export"].get("dynamic_spatial"):
             dynamic = {"images": {2: "height", 3: "width"}}

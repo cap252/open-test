@@ -36,6 +36,6 @@ source:
   commit: 9a00c173a44bfcf3a58cc2a60e37deb6a1fb9e03
 export:
   family: yolov7
-  opset: 18
+  opset: 17
   simplify: false
   split_detector: true

@@ -41,5 +41,5 @@ source:
     version: 1.0.15
 export:
   family: timm
-  opset: 18
-  simplify: true
+  opset: 17
+  simplify: false

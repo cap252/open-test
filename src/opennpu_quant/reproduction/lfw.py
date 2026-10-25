@@ -88,8 +88,7 @@ def _contract(selection, resolver):
 
 
 def _sources(root, samples):
-    from ..data.lfw import PAIR_HASH, LANDMARK_HASH
-    from ..evaluation.face_verification import read_pairs
+    from ..data.lfw import PAIR_HASH, LANDMARK_HASH, read_annotations
 
     pins = samples["input_contract"]["dataset_files"]
     expected = {"pairs.txt": PAIR_HASH, "lfw_funneled.json": LANDMARK_HASH}
@@ -97,18 +96,10 @@ def _sources(root, samples):
         pins[k] != v for k, v in expected.items()
     ):
         raise ValueError("LFW source pins differ from the supported protocol")
-    paths = {root / k: v for k, v in expected.items()}
-    for path, digest in paths.items():
-        if sha256(path) != digest:
-            raise ValueError("LFW source file changed: " + path.name)
-    if read_pairs(root / "pairs.txt") != samples["pairs"]:
+    pairs, landmarks = read_annotations(root)
+    if pairs != samples["pairs"]:
         raise ValueError("LFW pair/fold order differs from the selected reference")
-    landmarks = {}
-    for row in read_json(root / "lfw_funneled.json")["samples"]:
-        key = Path(row["full_path"]).relative_to("lfw_funneled").as_posix()
-        if key in landmarks:
-            raise ValueError("Duplicate LFW landmark key: " + key)
-        landmarks[key] = row["landmarks"]
+    paths = {root / k: v for k, v in expected.items()}
     image_root = (root / "data/lfw_funneled").resolve()
     for row in samples["validation"]:
         key = row["image_key"]
@@ -137,7 +128,7 @@ def _feeds(image_root, landmarks, samples, recipe, reference):
     import numpy as np
     from PIL import Image
     from .._feeds import feed_digest
-    from ..data.lfw import align_mobilefacenet
+    from ..data.lfw import aligned_crop
     from ..models.extended_preprocess import preprocess
 
     previous, aligned = None, None
@@ -149,11 +140,7 @@ def _feeds(image_root, landmarks, samples, recipe, reference):
             if hashlib.sha256(payload).hexdigest() != row["sha256"]:
                 raise ValueError("LFW source image changed: " + key)
             image = cv2.imdecode(np.frombuffer(payload, np.uint8), cv2.IMREAD_COLOR)
-            if image is None:
-                raise ValueError("Unreadable LFW image: " + key)
-            crop = align_mobilefacenet(image, landmarks[key])
-            if crop.shape != (112, 112, 3) or crop.dtype != np.uint8:
-                raise ValueError("Invalid aligned LFW crop: " + key)
+            crop = aligned_crop(image, landmarks, key)
             aligned, previous = Image.fromarray(crop[..., ::-1]), key
         image = (
             aligned.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
@@ -185,7 +172,7 @@ def prepare_lfw(*, bindings, root, output, selection=None, download=False):
     new cache is published only after its selected manifest and payload match.
     """
     from ..data.feed_cache import FeedCache, prepare_feed_cache
-    from ..data.lfw import _alignment_transform, download_inputs
+    from ..data.lfw import download_inputs, require_alignment
 
     resolver = Resolver(bindings)
     descriptor, recipe, samples, reference = _contract(selection, resolver)
@@ -198,7 +185,7 @@ def prepare_lfw(*, bindings, root, output, selection=None, download=False):
         raise ValueError(
             "LFW source root and output cache must be separate directories"
         )
-    _alignment_transform()
+    require_alignment()
     if download:
         download_inputs(root)
     image_root, landmarks, verify_source = _sources(root, samples)

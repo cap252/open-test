@@ -38,5 +38,7 @@ source:
 export:
   family: yolov3
   opset: 18
-  simplify: false
+  simplify: true
   split_detector: true
+  skipped_optimizers:
+  - fuse_pad_into_pool

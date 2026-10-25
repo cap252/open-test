@@ -38,5 +38,5 @@ source:
 export:
   family: ultralytics
   opset: 18
-  simplify: false
+  simplify: true
   split_detector: true

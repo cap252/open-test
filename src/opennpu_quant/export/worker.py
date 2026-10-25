@@ -72,18 +72,15 @@ def main():
                     # stride-aligned letterboxing; exercise square and both axes.
                     w, h = [(size, size), (size, size // 2), (size // 2, size)][index]
                 image = synthetic_image(index, w, h)
-            if recipe["export"]["family"] == "tf_ssd":
-                from PIL import Image
+            value, _ = preprocess(
+                image, recipe["preprocess"], recipe["input"]["layout"]
+            )
+            if recipe["name"] == "yolox" and index:
                 import numpy as np
 
-                value = np.asarray(
-                    image.resize((size, size), Image.Resampling.BILINEAR),
-                    dtype=np.uint8,
-                )[None]
-            else:
-                value, _ = preprocess(
-                    image, recipe["preprocess"], recipe["input"]["layout"]
-                )
+                # Runtime padding stays square. Also exercise the released graph's
+                # dynamic spatial axes by removing only the fixture's trailing pad.
+                value = np.ascontiguousarray(value[:, :, :h, :w])
             feeds.append({"images": value})
             images.append(image)
         if recipe["export"].get("dynamic_spatial"):
@@ -107,6 +104,7 @@ def main():
             result = finalize(
                 raw, recipe, feeds, references, Path(scratch), validation=a.validation
             )
+            result["export_settings"] = recipe["export"]
             protocol = raw.with_suffix(".protocol.json")
             if protocol.exists():
                 from .._io import read_json

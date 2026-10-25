@@ -13,6 +13,7 @@ input:
   layout: NCHW
 graphs:
   network: network.onnx
+  postprocess: postprocess.onnx
 preprocess:
   kind: posenet
   size: 513
@@ -206,7 +207,8 @@ source:
 export:
   family: posenet
   opset: 18
-  simplify: false
+  simplify: true
+  split_detector: true
   outputs:
   - heatmaps
   - offsets

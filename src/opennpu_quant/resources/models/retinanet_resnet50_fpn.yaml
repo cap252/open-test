@@ -12,6 +12,7 @@ input:
   - 800
   layout: NCHW
 graphs:
+  preprocess: preprocess.onnx
   network: network.onnx
   postprocess: postprocess.onnx
 preprocess:

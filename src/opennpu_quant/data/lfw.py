@@ -13,7 +13,8 @@ PAIR_HASH = "ea42330c62c92989f9d7c03237ed5d591365e89b3e649747777b70e692dc1592"
 LANDMARK_HASH = "a7ac7d5cbec62b79dd8b6c107c69754d59f32dcc0a534a280cff302f9eb6c68b"
 
 
-def _alignment_transform():
+def require_alignment():
+    """The pinned alignment dependency, checked before any download or output."""
     try:
         from skimage.transform import SimilarityTransform
     except ImportError:
@@ -30,7 +31,7 @@ def align_mobilefacenet(image, landmarks):
     """foamliu's 112-square early-return reference points (no inner padding)."""
     import cv2
 
-    SimilarityTransform = _alignment_transform()
+    SimilarityTransform = require_alignment()
 
     source = np.asarray(landmarks, np.float32).reshape(2, 5).T
     target = np.asarray(
@@ -50,6 +51,34 @@ def align_mobilefacenet(image, landmarks):
     if not fit.estimate(source, target) or not np.isfinite(fit.params).all():
         raise ValueError("Degenerate face alignment")
     return cv2.warpAffine(image, fit.params[:2], (112, 112), borderValue=0.0)
+
+
+def aligned_crop(image, landmarks, key):
+    """Align one decoded BGR original. Unreadable images and invalid crops fail."""
+    if image is None:
+        raise ValueError("Unreadable LFW image: " + key)
+    crop = align_mobilefacenet(image, landmarks[key])
+    if crop.shape != (112, 112, 3) or crop.dtype != np.uint8:
+        raise ValueError("Invalid aligned LFW crop: " + key)
+    return crop
+
+
+def read_annotations(root):
+    """Pinned pairs and five-point landmarks by image key. Duplicate keys fail."""
+    for name, digest in (
+        ("pairs.txt", PAIR_HASH),
+        ("lfw_funneled.json", LANDMARK_HASH),
+    ):
+        if sha256(root / name) != digest:
+            raise ValueError("LFW source file changed: " + name)
+    pairs = read_pairs(root / "pairs.txt")
+    landmarks = {}
+    for row in read_json(root / "lfw_funneled.json")["samples"]:
+        key = Path(row["full_path"]).relative_to("lfw_funneled").as_posix()
+        if key in landmarks:
+            raise ValueError("Duplicate LFW landmark key: " + key)
+        landmarks[key] = row["landmarks"]
+    return pairs, landmarks
 
 
 def download_inputs(root):
@@ -78,16 +107,14 @@ def download_inputs(root):
 
 
 def prepare_lfw(root, destination, *, download=False):
-    _alignment_transform()
+    require_alignment()
     import cv2
     from PIL import Image
 
     root, destination = Path(root).resolve(), Path(destination).resolve()
     if download:
         download_inputs(root)
-    if sha256(root / "pairs.txt") != PAIR_HASH:
-        raise ValueError("Official LFW pair content changed")
-    all_pairs = read_pairs(root / "pairs.txt")
+    all_pairs, landmarks = read_annotations(root)
     pairs = all_pairs
     all_required = {p[k] for p in all_pairs for k in ("first", "second")}
     required = sorted({p[k] for p in pairs for k in ("first", "second")})
@@ -99,14 +126,6 @@ def prepare_lfw(root, destination, *, download=False):
     )
     if set(chosen) & all_required:
         raise ValueError("Calibration keys overlap evaluation pairs")
-    if sha256(root / "lfw_funneled.json") != LANDMARK_HASH:
-        raise ValueError("Pinned landmarks changed")
-    landmarks = {}
-    for row in read_json(root / "lfw_funneled.json")["samples"]:
-        key = Path(row["full_path"]).relative_to("lfw_funneled").as_posix()
-        if key in landmarks:
-            raise ValueError("Duplicate landmark key")
-        landmarks[key] = row["landmarks"]
     image_root = root / "data/lfw_funneled"
     if len(list(image_root.glob("*/*.jpg"))) != 13233:
         raise ValueError("Expected all 13233 source LFW images")
@@ -125,12 +144,7 @@ def prepare_lfw(root, destination, *, download=False):
     ]:
         for key in keys:
             try:
-                image = cv2.imread(str(image_root / key))
-                if image is None:
-                    raise ValueError("Unreadable original image")
-                crop = align_mobilefacenet(image, landmarks[key])
-                if crop.shape != (112, 112, 3) or crop.dtype != np.uint8:
-                    raise ValueError("Invalid aligned crop")
+                crop = aligned_crop(cv2.imread(str(image_root / key)), landmarks, key)
                 digest = hashlib.sha256(crop.tobytes()).hexdigest()
                 crop_hashes[split].add(digest)
                 path = Path("aligned") / Path(key).with_suffix(".png")

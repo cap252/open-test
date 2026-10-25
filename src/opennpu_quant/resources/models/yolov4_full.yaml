@@ -41,7 +41,7 @@ source:
     file: yolov4.cfg
 export:
   family: yolov4
-  opset: 18
+  opset: 17
   simplify: false
   outputs:
   - boxes

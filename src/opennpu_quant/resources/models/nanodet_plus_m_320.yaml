@@ -13,6 +13,7 @@ input:
   layout: NCHW
 graphs:
   network: network.onnx
+  postprocess: postprocess.onnx
 preprocess:
   kind: nanodet
   size: 320
@@ -37,4 +38,5 @@ source:
 export:
   family: nanodet
   opset: 18
-  simplify: false
+  simplify: true
+  split_detector: true

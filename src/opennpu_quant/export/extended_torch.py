@@ -78,6 +78,10 @@ def build(recipe, weight, source):
         if family == "yolov3":
             kwargs.update(inplace=False, fuse=True)
         base = attempt_load(str(weight), **kwargs)
+        if recipe["name"] in ("yolov3_full", "yolov7_full"):
+            for module in base.modules():
+                if hasattr(module, "onnx_dynamic"):
+                    module.onnx_dynamic = True
         if family == "yolov7":
             for module in base.modules():
                 if hasattr(module, "export"):
@@ -296,8 +300,8 @@ def fixed_nearest_upsample(model, feeds):
     return result
 
 
-def dynamic_face_grids(model, feeds):
-    """Rebuild legacy face grids on every forward so tracing retains their shapes."""
+def dynamic_face_grids(model, feeds, head_types=("IKeypoint",)):
+    """Rebuild legacy grids on every forward so tracing retains their shapes."""
     import copy
     import torch
 
@@ -308,9 +312,9 @@ def dynamic_face_grids(model, feeds):
         # otherwise become an ONNX constant when tracing the same input shape.
         module.grid = [inputs[0][0].new_zeros(1) for _ in range(module.nl)]
 
-    heads = [m for m in result.modules() if m.__class__.__name__ == "IKeypoint"]
+    heads = [m for m in result.modules() if m.__class__.__name__ in head_types]
     if len(heads) != 1:
-        raise ValueError("Expected one YOLOv7-face IKeypoint head")
+        raise ValueError("Expected one legacy YOLO grid head")
     heads[0].register_forward_pre_hook(clear_grid)
     with torch.no_grad():
         for feed in feeds:

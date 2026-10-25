@@ -60,6 +60,9 @@ def split_detector(model, mid):
             raise ValueError("Ambiguous prototype output boundary")
         terminal = [x for x in terminal if x not in proto] + ["prototypes"]
     expected = {
+        "nanodet_plus_m_320": 4,
+        "posenet_101": 4,
+        "retinanet_resnet50_fpn": 10,
         "yolov9_t": 6,
         "yolov9_s": 6,
         "yolov8n": 6,
@@ -132,7 +135,10 @@ def split_detector(model, mid):
     shape_outputs = [
         node.output[0]
         for node in post.graph.node
-        if node.op_type == "Shape" and has_uncut_feature_conv(node.input[0])
+        if node.op_type == "Shape"
+        and (
+            mid in ("yolov9_t", "yolov7_face") or has_uncut_feature_conv(node.input[0])
+        )
     ]
     terminal += shape_outputs
     network = extract(model, inputs, terminal)
@@ -241,3 +247,49 @@ def fold_constant_floors(model):
         values[node.output[0]] = folded
     onnx.checker.check_model(result, full_check=True)
     return result, dict(kind="constant_only_Floor_evaluation", changes=changes)
+
+
+def fold_resize_sizes(model, floors):
+    """Keep the released constant Cast sizes after fixed-shape Floor evaluation."""
+    result = copy.deepcopy(model)
+    values = {v.name: numpy_helper.to_array(v) for v in result.graph.initializer}
+    descendants = {v["output"] for v in floors}
+    changes = []
+    for node in result.graph.node:
+        if node.op_type == "Constant" and len(node.attribute) == 1:
+            values[node.output[0]] = numpy_helper.to_array(node.attribute[0].t)
+            continue
+        if not node.input or any(v not in values for v in node.input):
+            continue
+        args = [values[v] for v in node.input]
+        attrs = {a.name: onnx.helper.get_attribute_value(a) for a in node.attribute}
+        if node.op_type == "Unsqueeze":
+            value = np.expand_dims(args[0], tuple(int(x) for x in args[1].flat))
+        elif node.op_type == "Concat":
+            value = np.concatenate(args, axis=attrs["axis"])
+        elif node.op_type == "Cast":
+            value = args[0].astype(onnx.helper.tensor_dtype_to_np_dtype(attrs["to"]))
+        else:
+            continue
+        values[node.output[0]] = value
+        if not any(v in descendants for v in node.input):
+            continue
+        descendants.update(node.output)
+        if node.op_type == "Cast":
+            if value.dtype != np.int64 or value.shape != (2,):
+                raise ValueError("Unexpected fixed Resize size expression")
+            changes.append(
+                dict(node=node.name, output=node.output[0], size=value.tolist())
+            )
+            node.CopyFrom(
+                onnx.helper.make_node(
+                    "Constant",
+                    [],
+                    list(node.output),
+                    name=node.name,
+                    value=numpy_helper.from_array(value),
+                )
+            )
+    if len(changes) != 2:
+        raise ValueError("Expected two constant YOLOv3 Resize size expressions")
+    return result, dict(changes=changes)

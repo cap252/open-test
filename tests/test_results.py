@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import subprocess
 import sys
 import tempfile
@@ -226,12 +227,20 @@ class ResultTests(unittest.TestCase):
             )
             self.assertEqual(content, completed.stdout)
             self.assertEqual("", completed.stderr)
-            code = "from opennpu_quant.cli import main; import sys; main(['results',sys.argv[1]]); assert not set(['numpy','onnx','onnxruntime','torch','tensorflow','cv2']) & set(sys.modules)"
-            subprocess.run(
-                [sys.executable, "-c", code, str(p / "records.json")],
-                stdout=subprocess.DEVNULL,
+            code = """
+import sys, json, contextlib, io
+from opennpu_quant.cli import main
+with contextlib.redirect_stdout(io.StringIO()):
+    main(['results',sys.argv[1]])
+print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'} & set(sys.modules))))
+"""
+            checked = subprocess.run(
+                [sys.executable, "-O", "-c", code, str(p / "records.json")],
+                capture_output=True,
+                text=True,
                 check=True,
             )
+            self.assertEqual([], json.loads(checked.stdout))
 
     def test_report_preserves_partial_denominators_and_rejects_tampering(self):
         from opennpu_quant.report import report
@@ -297,9 +306,17 @@ class ResultTests(unittest.TestCase):
             self.assertIsNone(value["rows"][1]["value_pct"])
             self.assertIn("—", (p / "summary.md").read_text())
             self.assertTrue((p / "records.json").is_file())
-            code = "from opennpu_quant.cli import main; import sys; main(['report',sys.argv[1],'--stdout','tsv']); assert not set(['numpy','onnx','onnxruntime','torch','tensorflow','cv2']) & set(sys.modules)"
-            subprocess.run(
-                [sys.executable, "-c", code, str(p)],
-                stdout=subprocess.DEVNULL,
+            code = """
+import sys, json, contextlib, io
+from opennpu_quant.cli import main
+with contextlib.redirect_stdout(io.StringIO()):
+    main(['report',sys.argv[1],'--stdout','tsv'])
+print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'} & set(sys.modules))))
+"""
+            checked = subprocess.run(
+                [sys.executable, "-O", "-c", code, str(p)],
+                capture_output=True,
+                text=True,
                 check=True,
             )
+            self.assertEqual([], json.loads(checked.stdout))

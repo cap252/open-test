@@ -136,7 +136,10 @@ class RecoveryTests(unittest.TestCase):
                     path = output / f"raw_data{'' if full else '.partial'}.{suffix}"
                     with path.open(encoding="utf-8-sig", newline="") as stream:
                         rows = list(csv.DictReader(stream, delimiter=separator))
-                    for row, accuracy, recovery in zip(rows, (base, value), expected):
+                    self.assertEqual(2, len(rows))
+                    for row, accuracy, recovery in zip(
+                        rows, (base, value), expected, strict=True
+                    ):
                         self.assertBits(recovery, float(row["recovery_percent"]))
                         self.assertBits(
                             accuracy, json.loads(row["metrics_json"])["top1"]["value"]

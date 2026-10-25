@@ -137,7 +137,8 @@ class CliUsabilityTests(unittest.TestCase):
         self.assertEqual("cpu", payload["device"])
         current = read_json(paths.runs / config["name"] / "summary.json")
         self.assertEqual(current["rows"], payload["rows"])
-        for before, after in zip(saved["rows"], payload["rows"]):
+        self.assertEqual(2, len(saved["rows"]))
+        for before, after in zip(saved["rows"], payload["rows"], strict=True):
             for key in (
                 "metrics_json",
                 "value_pct",
@@ -399,19 +400,30 @@ class CliUsabilityTests(unittest.TestCase):
 
     def test_metadata_path_errors_do_not_import_numerical_runtimes(self):
         code = """
-import sys
+import sys, json, contextlib, io
 from opennpu_quant.cli import main
-for command in ('report', 'results'):
-    try: main([command, sys.argv[1]])
-    except SystemExit as error: assert error.code == 2
-assert not {'numpy', 'onnx', 'onnxruntime', 'torch'} & set(sys.modules)
+codes = []
+with contextlib.redirect_stdout(io.StringIO()):
+    for command in ('report', 'results'):
+        try:
+            main([command, sys.argv[1]])
+        except SystemExit as error:
+            codes.append(error.code)
+        else:
+            codes.append(None)
+print(json.dumps(dict(codes=codes, numerical_modules=sorted(
+    {'numpy', 'onnx', 'onnxruntime', 'torch'} & set(sys.modules)
+))))
 """
         result = subprocess.run(
-            [sys.executable, "-c", code, str(self.root / "missing")],
+            [sys.executable, "-O", "-c", code, str(self.root / "missing")],
             capture_output=True,
             text=True,
         )
         self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(
+            dict(codes=[2, 2], numerical_modules=[]), json.loads(result.stdout)
+        )
 
     def test_metadata_files_need_not_have_prescribed_names(self):
         from opennpu_quant._io import atomic_json

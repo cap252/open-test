@@ -1,4 +1,4 @@
-import copy, shutil, subprocess, sys, tempfile, unittest
+import copy, json, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
 import numpy as np
@@ -11,8 +11,14 @@ from opennpu_quant._io import atomic_json, read_json
 
 class PortableTests(unittest.TestCase):
     def test_import_does_not_load_numerical_runtimes(self):
-        code = "import sys; import opennpu_quant; assert not set(['numpy','onnx','onnxruntime','torch','tensorflow']) & set(sys.modules)"
-        subprocess.run([sys.executable, "-c", code], check=True)
+        code = "import sys, json; import opennpu_quant; print(json.dumps(sorted(set(['numpy','onnx','onnxruntime','torch','tensorflow']) & set(sys.modules))))"
+        result = subprocess.run(
+            [sys.executable, "-O", "-c", code],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual([], json.loads(result.stdout))
 
     def test_recipes_and_strict_config(self):
         from opennpu_quant.models.spec import model_names, ModelSpec

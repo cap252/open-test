@@ -5,6 +5,7 @@ from google.protobuf.message import DecodeError
 import onnx
 from onnx.external_data_helper import _get_all_tensors, convert_model_from_external_data
 from opennpu_quant._io import object_hash, sha256
+from .._protobuf import is_repeated
 
 
 def _reject_external_sparse(message):
@@ -23,7 +24,7 @@ def _reject_external_sparse(message):
         return
     for field, value in message.ListFields():
         if field.type == field.TYPE_MESSAGE:
-            children = value if field.label == field.LABEL_REPEATED else (value,)
+            children = value if is_repeated(field) else (value,)
             for child in children:
                 _reject_external_sparse(child)
 

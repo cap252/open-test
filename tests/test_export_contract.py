@@ -2,6 +2,7 @@
 
 import copy
 import json
+from importlib.resources import files
 from pathlib import Path
 import tempfile
 import unittest
@@ -39,6 +40,53 @@ def graph():
 
 def contract(m):
     return {k: v for k, v in graph_contract(m, network=True).items() if k != "names"}
+
+
+class PackagedExportContractTests(unittest.TestCase):
+    def setUp(self):
+        self.reference = json.loads(
+            files("opennpu_quant.resources")
+            .joinpath("export-contracts.json")
+            .read_text()
+        )
+        self.baseline = json.loads(
+            (
+                Path(__file__).parent / "fixtures/release_export_reference.json"
+            ).read_text()
+        )
+
+    def test_packaged_reference_checksum_and_release_identity(self):
+        self.assertEqual(1, self.reference["schema_version"])
+        self.assertEqual(object_hash(self.reference["models"]), self.reference["id"])
+        self.assertEqual(self.baseline["reference_id"], self.reference["id"])
+
+    def test_all_packaged_models_and_graph_roles_match_recipes_and_selection(self):
+        from opennpu_quant.models.spec import ModelSpec, model_names
+        from opennpu_quant.reproduction.assets import catalog
+
+        names = model_names()
+        selected = {
+            e["model"]: e for e in catalog()["entries"] if e["condition"] == "fp32"
+        }
+        self.assertEqual(38, len(names))
+        self.assertEqual(set(names), set(self.reference["models"]))
+        self.assertEqual(set(names), set(selected))
+        for name in names:
+            with self.subTest(model=name):
+                roles = set(self.reference["models"][name])
+                self.assertEqual(set(ModelSpec.load(name).recipe["graphs"]), roles)
+                self.assertEqual(set(selected[name]["graphs"]), roles)
+                self.assertIn("network", roles)
+
+    def test_export_policies_match_the_reviewed_release_baseline(self):
+        from opennpu_quant.models.spec import ModelSpec, model_names
+
+        # Graph digests do not expose recipe fields such as simplify or opset.
+        # Keep a reviewed snapshot so policy regressions fail without an export.
+        self.assertEqual(set(model_names()), set(self.baseline["export_settings"]))
+        for name, expected in self.baseline["export_settings"].items():
+            with self.subTest(model=name):
+                self.assertEqual(expected, ModelSpec.load(name).recipe["export"])
 
 
 class ExportContractTests(unittest.TestCase):

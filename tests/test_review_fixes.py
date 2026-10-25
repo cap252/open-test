@@ -3,6 +3,7 @@ import contextlib
 import importlib.util
 import io
 import itertools
+import json
 import subprocess
 import sys
 import tempfile
@@ -301,7 +302,7 @@ class ValidationFixTests(unittest.TestCase):
         )
 
     def test_optional_torch_cache_suite(self):
-        code = """import importlib.abc, importlib.util, sys, unittest
+        code = """import importlib.abc, importlib.util, json, sys, unittest
 class NoTorch(importlib.abc.MetaPathFinder):
  def find_spec(self, fullname, path=None, target=None):
   if fullname == 'torch' or fullname.startswith('torch.'):
@@ -311,15 +312,18 @@ importlib.util.find_spec=lambda name, package=None: None if name=='torch' else o
 sys.meta_path.insert(0,NoTorch())
 suite=unittest.defaultTestLoader.loadTestsFromName('tests.ort.test_adaround_cache')
 result=unittest.TextTestRunner().run(suite)
-assert result.wasSuccessful()
-assert len(result.skipped)==5 and result.testsRun==7
-assert 'torch' not in sys.modules
+print(json.dumps(dict(success=result.wasSuccessful(), skipped=len(result.skipped),
+                      tests_run=result.testsRun, torch_loaded='torch' in sys.modules)))
 """
-        subprocess.run(
-            [sys.executable, "-B", "-c", code],
+        checked = subprocess.run(
+            [sys.executable, "-B", "-O", "-c", code],
             capture_output=True,
             text=True,
             check=True,
+        )
+        self.assertEqual(
+            dict(success=True, skipped=5, tests_run=7, torch_loaded=False),
+            json.loads(checked.stdout),
         )
 
     @unittest.skipUnless(

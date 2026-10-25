@@ -99,18 +99,27 @@ class PublicDocumentationTests(unittest.TestCase):
 
     def test_bare_import_remains_light_and_creates_no_files(self):
         code = """
-import sys
+import sys, json
 from pathlib import Path
 import opennpu_quant
-assert len(opennpu_quant.__all__) == 16
-assert not {'numpy', 'onnx', 'onnxruntime', 'torch', 'tensorflow'} & set(sys.modules)
-assert not list(Path('.').iterdir())
+print(json.dumps(dict(
+    public_count=len(opennpu_quant.__all__),
+    numerical_modules=sorted({'numpy', 'onnx', 'onnxruntime', 'torch', 'tensorflow'} & set(sys.modules)),
+    created_files=sorted(p.name for p in Path('.').iterdir()),
+)))
 """
         with tempfile.TemporaryDirectory() as folder:
             result = subprocess.run(
-                [sys.executable, "-c", code], cwd=folder, text=True, capture_output=True
+                [sys.executable, "-O", "-c", code],
+                cwd=folder,
+                text=True,
+                capture_output=True,
             )
             self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual(
+                dict(public_count=16, numerical_modules=[], created_files=[]),
+                json.loads(result.stdout),
+            )
 
     def test_replay_factory_contract_remains_unchanged(self):
         model = toy_model()

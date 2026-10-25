@@ -204,13 +204,16 @@ class ExportBoundaryTests(unittest.TestCase):
                         str(root),
                     ],
                 ),
-                patch.object(worker, "checkpoint", return_value=weight),
-                patch.object(worker, "preprocess", wraps=preprocess) as prepare_input,
+                patch.object(worker, "checkpoint", autospec=True, return_value=weight),
+                patch.object(
+                    worker, "preprocess", autospec=True, side_effect=preprocess
+                ) as prepare_input,
                 patch(
                     "opennpu_quant.export.tensorflow_models.export_model",
+                    autospec=True,
                     side_effect=export,
                 ),
-                patch.object(worker, "finalize", side_effect=finish),
+                patch.object(worker, "finalize", autospec=True, side_effect=finish),
                 patch("opennpu_quant.envcheck.info", return_value={}),
             ):
                 worker.main()
@@ -249,13 +252,14 @@ class ExportBoundaryTests(unittest.TestCase):
                         str(root),
                     ],
                 ),
-                patch.object(worker, "checkpoint", return_value=weight),
-                patch.object(worker, "checkout", return_value=root),
+                patch.object(worker, "checkpoint", autospec=True, return_value=weight),
+                patch.object(worker, "checkout", autospec=True, return_value=root),
                 patch(
                     "opennpu_quant.export.torch_models.export_model",
+                    autospec=True,
                     return_value=[{}, {}, {}],
                 ),
-                patch.object(worker, "finalize", side_effect=finish),
+                patch.object(worker, "finalize", autospec=True, side_effect=finish),
                 patch("opennpu_quant.envcheck.info", return_value={}),
             ):
                 worker.main()

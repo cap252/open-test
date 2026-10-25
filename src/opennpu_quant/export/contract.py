@@ -9,6 +9,7 @@ import onnx
 from onnx import numpy_helper
 
 from .._io import object_hash
+from .._protobuf import is_repeated
 
 
 def _tensor(value):
@@ -53,7 +54,7 @@ class _Graph:
                 elif field.type == field.TYPE_MESSAGE:
                     item = (
                         [normalize(v) for v in item]
-                        if field.label == field.LABEL_REPEATED
+                        if is_repeated(field)
                         else normalize(item)
                     )
                 result.append([field.name, item])

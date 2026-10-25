@@ -8,7 +8,26 @@ import unittest
 from unittest.mock import patch
 
 
-def _cache_worker(pipe, directory, operation, *, hold=None, variable=False, fail=False):
+def _cache_worker(pipe, directory, operation, **options):
+    import fcntl
+
+    flock = fcntl.flock
+
+    def observed_flock(stream, mode):
+        if mode in (fcntl.LOCK_SH, fcntl.LOCK_EX):
+            try:
+                return flock(stream, mode | fcntl.LOCK_NB)
+            except BlockingIOError:
+                pipe.send(("blocked", operation))
+        return flock(stream, mode)
+
+    with patch.object(fcntl, "flock", observed_flock):
+        _cache_operation(pipe, directory, operation, **options)
+
+
+def _cache_operation(
+    pipe, directory, operation, *, hold=None, variable=False, fail=False
+):
     """Hold a real cache operation at an IPC barrier, without scheduler sleeps."""
     released = False
 
@@ -197,7 +216,7 @@ class CacheConcurrencyTests(unittest.TestCase):
                 )
                 self.assertEqual(("held", "factory"), self.receive(first))
                 _, second = self.start(directory, "input", variable=variable)
-                self.assertFalse(second.poll(0.2), "Contending creator did not wait")
+                self.assertEqual(("blocked", "input"), self.receive(second))
                 first.send("release")
                 created, reused = self.done(first), self.done(second)
                 self.assertTrue(created["factory_called"])
@@ -216,7 +235,7 @@ class CacheConcurrencyTests(unittest.TestCase):
                 )
                 self.assertEqual(("held", "factory"), self.receive(first))
                 _, second = self.start(directory, "input", variable=variable)
-                self.assertFalse(second.poll(0.2))
+                self.assertEqual(("blocked", "input"), self.receive(second))
                 first.send("release")
                 self.assertEqual("ValueError", self.receive(first)[1])
                 recovered = self.done(second)
@@ -251,7 +270,7 @@ class CacheConcurrencyTests(unittest.TestCase):
         _, first = self.start(directory, "read", hold="validation")
         self.assertEqual(("held", "validation"), self.receive(first))
         _, writer = self.start(directory, "save", hold="publication")
-        self.assertFalse(writer.poll(0.2))
+        self.assertEqual(("blocked", "save"), self.receive(writer))
         first.send("release")
         self.assertEqual(expected, self.done(first))
         self.assertEqual(("held", "publication"), self.receive(writer))
@@ -263,7 +282,7 @@ class CacheConcurrencyTests(unittest.TestCase):
         _, writer = self.start(directory, "save", hold="publication")
         self.assertEqual(("held", "publication"), self.receive(writer))
         _, reader = self.start(directory, "read")
-        self.assertFalse(reader.poll(0.2))
+        self.assertEqual(("blocked", "read"), self.receive(reader))
         writer.send("release")
         self.assertEqual(expected, self.done(writer))
         self.assertEqual(expected, self.done(reader))
@@ -273,7 +292,7 @@ class CacheConcurrencyTests(unittest.TestCase):
         _, writer = self.start(directory, "save", hold="publication")
         self.assertEqual(("held", "publication"), self.receive(writer))
         _, reader = self.start(directory, "read")
-        self.assertFalse(reader.poll(0.2))
+        self.assertEqual(("blocked", "read"), self.receive(reader))
         payload = next(directory.glob("generations/*/histograms.npz"))
         payload.write_bytes(payload.read_bytes() + b"tampered")
         writer.send("release")
@@ -287,7 +306,7 @@ class CacheConcurrencyTests(unittest.TestCase):
         owner, first = self.start(path, "lock", hold="lock")
         self.assertEqual(("held", "lock"), self.receive(first))
         _, second = self.start(path, "lock", variable=True)
-        self.assertFalse(second.poll(0.2))
+        self.assertEqual(("blocked", "lock"), self.receive(second))
         owner.terminate()
         owner.join(5)
         self.assertFalse(owner.is_alive())
@@ -301,7 +320,7 @@ class CacheConcurrencyTests(unittest.TestCase):
         _, first = self.start(path, "lock", hold="lock")
         self.assertEqual(("held", "lock"), self.receive(first))
         waiter, second = self.start(path, "lock")
-        self.assertFalse(second.poll(0.2))
+        self.assertEqual(("blocked", "lock"), self.receive(second))
         os.kill(waiter.pid, signal.SIGINT)
         self.assertEqual("KeyboardInterrupt", self.receive(second)[1])
         with self.assertRaisesRegex(RuntimeError, "Another process"):

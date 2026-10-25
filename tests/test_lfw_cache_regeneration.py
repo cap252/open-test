@@ -261,7 +261,7 @@ class LfwCacheRegenerationTests(unittest.TestCase):
                 self.generate()
             self.assertFalse((self.root / "generated").exists())
 
-    def test_input_mismatch_and_interruption_never_publish(self):
+    def test_input_digest_mismatch_is_rejected_before_manifest_check(self):
         from opennpu_quant.models.extended_preprocess import preprocess
 
         def wrong(image, cfg):
@@ -269,18 +269,51 @@ class LfwCacheRegenerationTests(unittest.TestCase):
             tensor.flat[0] += np.float32(1)
             return tensor, meta
 
-        for replacement in (wrong, KeyboardInterrupt()):
-            with (
-                self.subTest(error=type(replacement).__name__),
-                patch(
-                    "opennpu_quant.models.extended_preprocess.preprocess",
-                    side_effect=replacement,
-                ),
+        with patch(
+            "opennpu_quant.models.extended_preprocess.preprocess", side_effect=wrong
+        ):
+            with self.assertRaisesRegex(
+                ValueError, r"LFW input 0 .* differs from reference"
             ):
-                with self.assertRaises((ValueError, KeyboardInterrupt)):
-                    self.generate()
-            self.assertFalse((self.root / "generated").exists())
-            self.assertEqual([], list(self.root.glob("generated.building-*")))
+                self.generate()
+        self.assert_unpublished()
+
+    def assert_unpublished(self):
+        self.assertFalse((self.root / "generated").exists())
+        self.assertEqual([], list(self.root.glob("generated.building-*")))
+
+    def test_interruption_never_publishes(self):
+        with patch(
+            "opennpu_quant.models.extended_preprocess.preprocess",
+            side_effect=KeyboardInterrupt,
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                self.generate()
+        self.assert_unpublished()
+
+    def test_generated_manifest_mismatch_is_rejected_with_matching_inputs(self):
+        def changed_manifest(directory, *args, **kwargs):
+            cache = prepare_feed_cache(directory, *args, **kwargs)
+            path = Path(directory) / "manifest.json"
+            manifest = read_json(path)
+            self.assertEqual(self.reference["feed_digests"], manifest["feed_digests"])
+            self.assertEqual(self.reference["tensors"], manifest["tensors"])
+            # Identical parsed contents and payloads, different manifest bytes.
+            path.write_text(path.read_text() + "\n")
+            return cache
+
+        with patch(
+            "opennpu_quant.data.feed_cache.prepare_feed_cache",
+            autospec=True,
+            side_effect=changed_manifest,
+        ) as build:
+            with self.assertRaisesRegex(
+                ValueError,
+                "Generated LFW cache manifest or tensor file hash differs from reference",
+            ):
+                self.generate()
+            build.assert_called_once()
+        self.assert_unpublished()
 
     def test_corrupt_existing_cache_is_not_overwritten(self):
         self.generate()

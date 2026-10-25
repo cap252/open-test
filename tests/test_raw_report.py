@@ -252,13 +252,20 @@ class RawReportTests(unittest.TestCase):
             )
 
     def metadata_cli(self, args):
-        code = "from opennpu_quant.cli import main; import sys,json; main(json.loads(sys.argv[1])); assert not {'numpy','onnx','onnxruntime','torch','tensorflow','cv2'} & set(sys.modules)"
+        code = """
+import sys, json, contextlib, io
+from opennpu_quant.cli import main
+with contextlib.redirect_stdout(io.StringIO()):
+    main(json.loads(sys.argv[1]))
+print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'} & set(sys.modules))))
+"""
         result = subprocess.run(
-            [sys.executable, "-c", code, json.dumps(args)],
+            [sys.executable, "-O", "-c", code, json.dumps(args)],
             capture_output=True,
             text=True,
         )
         self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual([], json.loads(result.stdout))
 
     def test_replay_full_partial_pairs_and_no_inference_cli(self):
         for full, pairs in ((False, False), (True, False), (False, True), (True, True)):

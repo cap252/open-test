@@ -309,8 +309,13 @@ def tables(records):
         base_ok = b is not None and measurement_reason(b) is None
         if b and b.get("quantization") is not None:
             pair_state, pair_reason = "mismatch", "mismatch:baseline_is_not_FP32"
-        elif not ok or (b is not None and not base_ok):
-            pair_state, pair_reason = "insufficient_evidence", "unverified_measurement"
+        elif not ok:
+            pair_state, pair_reason = "insufficient_evidence", "measurement:" + reason
+        elif b is not None and not base_ok:
+            pair_state, pair_reason = (
+                "insufficient_evidence",
+                "baseline:" + measurement_reason(b),
+            )
         elif b is not None and _baseline_scope(r) != _baseline_scope(b):
             pair_state, pair_reason = (
                 "mismatch",
@@ -477,43 +482,65 @@ def report_policy(value):
 
 
 def export_records(
-    records, directory, *, metadata=None, formats=None, table_profile=None, summary=None
+    records,
+    directory,
+    *,
+    metadata=None,
+    formats=None,
+    table_profile=None,
+    summary=None,
+    _refresh_existing=False,
 ):
-    """Write CSV and JSON by default; a table profile replaces the primary table."""
+    """Write requested reports, optionally refreshing existing run reports too."""
     selected = normalize_formats(formats)
-    if table_profile:
-        from .raw_report import build_report, write_report
+    directory = Path(directory)
 
-        compatible = build_report(records, profile=table_profile)
+    def wanted(name, requested):
+        return requested or (_refresh_existing and (directory / name).is_file())
+
+    raw_files = ["raw_data.metadata.json"] + [
+        stem + "." + suffix
+        for stem in ("raw_data", "raw_data.partial")
+        for suffix in ("csv", "tsv")
+    ]
+    compatible = None
+    if table_profile or any(wanted(name, False) for name in raw_files):
+        from .raw_report import build_report
+
+        compatible = build_report(records, profile=table_profile or "opennpu_raw")
     rows, metrics = tables(records)
     if summary is None:
         summary = summarize(
             records, rows=rows, policy=(metadata or {}).get("report_policy")
         )
     raw_rows = [raw_export_row(row) for row in rows]
-    directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    exports = [("metrics", metrics, METRIC_FIELDS)]
-    if not table_profile:
-        exports.insert(0, ("results", raw_rows, RAW_FIELDS))
-    for name, values, fields in exports:
-        if "csv" in selected:
-            _text(
-                directory / (name + ".csv"),
-                table_text(values, fields, delimiter=","),
-                "utf-8-sig",
-            )
-        if "tsv" in selected:
-            _text(directory / (name + ".tsv"), table_text(values, fields), "utf-8")
-    if "json" in selected:
+    for name, values, fields in (
+        ("results", raw_rows, RAW_FIELDS),
+        ("metrics", metrics, METRIC_FIELDS),
+    ):
+        for suffix, delimiter, encoding in (
+            ("csv", ",", "utf-8-sig"),
+            ("tsv", "\t", "utf-8"),
+        ):
+            filename = name + "." + suffix
+            requested = suffix in selected and (name == "metrics" or not table_profile)
+            if wanted(filename, requested):
+                _text(
+                    directory / filename,
+                    table_text(values, fields, delimiter=delimiter),
+                    encoding,
+                )
+    if wanted("records.json", "json" in selected):
         atomic_json(
             directory / "records.json",
             dict(
                 schema_version=SCHEMA_VERSION, metadata=metadata or {}, records=records
             ),
         )
+    if wanted("summary.json", "json" in selected):
         atomic_json(directory / "summary.json", summary)
-    if "md" in selected:
+    if wanted("summary.md", "md" in selected):
         _text(
             directory / "summary.md",
             _markdown(
@@ -524,8 +551,16 @@ def export_records(
             ),
             "utf-8",
         )
-    if table_profile:
-        write_report(compatible, directory, source=metadata, formats=selected)
+    if compatible is not None:
+        from .raw_report import _write_report
+
+        _write_report(
+            compatible,
+            directory,
+            source=metadata,
+            selected=selected if table_profile else frozenset(),
+            refresh_existing=_refresh_existing,
+        )
     return rows
 
 

@@ -262,6 +262,46 @@ class FinalReproductionTests(unittest.TestCase):
                 1, run(**args, output=root / "compact", storage="predictions")["failed"]
             )
 
+    def test_resume_checks_prediction_content_even_with_updated_file_hash(self):
+        from opennpu_quant.reproduction.assets import checked_file, file_record, seal
+
+        for storage in ("raw", "predictions"):
+            with self.subTest(storage=storage), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                fixture(root)
+                prepare(
+                    bindings=root / "bindings.json",
+                    selection=root / "selection.json",
+                    output=root / "prepared",
+                )
+                args = dict(
+                    package=root / "prepared",
+                    bindings=root / "bindings.json",
+                    output=root / "run",
+                    storage=storage,
+                )
+                self.assertEqual(1, run(**args)["completed"])
+                folder = root / "run/resnet18__fp32"
+                prediction = folder / "000000.prediction.json"
+                value = read_json(prediction)
+                value["top5"][0], value["top5"][1] = value["top5"][1], value["top5"][0]
+                atomic_json(prediction, value)
+                marker = folder / "000000.json"
+                saved = unseal(marker)
+                saved["prediction"] = file_record(prediction, folder)
+                seal(marker, saved)
+                self.assertEqual(
+                    prediction, checked_file(folder, unseal(marker)["prediction"])
+                )
+                (folder / "result.json").unlink()
+                result = run(**args)
+                self.assertEqual(0, result["completed"])
+                self.assertEqual(1, result["failed"])
+                state = unseal(root / "run/run.json")["conditions"][0]
+                self.assertEqual("Cached postprocessing differs", state["error"])
+                self.assertFalse((folder / "result.json").exists())
+                self.assertEqual(value, read_json(prediction))
+
     def test_original_accuracy_is_independent_of_execution_completion(self):
         value = dict(stages=dict(full_accuracy="pending"))
         self.assertEqual("pending", original_accuracy(value, {}, Path("."))["state"])

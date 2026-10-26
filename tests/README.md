@@ -89,6 +89,7 @@ The fixed-angle math check uses [20 high-precision reference cases](fixtures/fac
 | `test_portable.py` | End-to-end local run with resume, reuse and tampering, statistics relocation, downloads and archives, checkout cleanup and ImageNet preparation |
 | `test_dataset_download.py` | COCO/VOC downloads from small local archives, CLI preparation, keypoint inputs, VOC layout, reuse and missing-file repair, checksums, conflicting files, unsafe archives and existing manifest validation |
 | `test_result_reliability.py` | Result reuse evidence, invalidation by graph or data changes, forced recompute, stale files, original errors, undefined primary metric |
+| `test_runtime_boundaries.py` | CPU numerical identity, FP32-only input requirements, environment evidence and GPU profile limits |
 | `test_code_identity.py` | Identity changes for nested Python edits, renames, additions and deletions, and ignores non-Python files |
 | `test_cache_concurrency.py` | Concurrent input and statistics readers, one input-cache builder, waiting writers, failure recovery, process exit, interruption and integrity checks after waiting |
 | `test_recalibrate.py` | `--recalibrate` generations, partial and interrupted runs, the source files in the statistics cache key |

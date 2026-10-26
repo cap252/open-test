@@ -66,12 +66,16 @@ def checkout(recipe, directory, explicit=None):
     ).strip()
     if changed:
         raise ValueError("Upstream tracked source has local changes")
-    from .source_archive import verify_source_files
+    from .source_archive import verify_source_files, source_recovery_hint
 
     tracked = subprocess.check_output(
         ["git", "-C", str(target), "ls-files", "-z"], text=True
     ).split("\0")
-    verify_source_files(target, set(tracked))
+    verify_source_files(
+        target,
+        set(tracked),
+        recovery_hint=source_recovery_hint(target, explicit=explicit is not None),
+    )
     sys.path.insert(0, str(target))
     return target
 

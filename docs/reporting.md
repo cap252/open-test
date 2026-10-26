@@ -42,9 +42,11 @@ With `--table-profile opennpu_raw`, these files replace `results.csv`:
 | `raw_data.partial.csv` | Valid metrics from evaluations that do not meet the full-evaluation requirements, such as `--limit` runs |
 | `raw_data.metadata.json` | Provenance, row locations, and pairing and exclusion reasons. Always retained with this profile |
 
+Records without explicit full-evaluation evidence remain in the partial tables and are excluded from full-cohort means. This classification does not establish that the original evaluation was partial.
+
 `--format tsv` writes TSV tables instead of CSV, `json` writes the two JSON reports, and `md` writes `summary.md`. Formats can be combined. Empty tables retain their headers. CSV uses UTF-8 with a BOM, and TSV uses plain UTF-8.
 
-`reproduce report` also accepts `--models` and `--conditions`. If a condition is missing from the profile tables, look up its reason in `raw_data.metadata.json`. Existing files in unselected formats are preserved. Use a new report directory for a clean output set.
+`reproduce report` also accepts `--models` and `--conditions`. If a condition is missing from the profile tables, look up its reason in `raw_data.metadata.json`. Standalone report commands preserve files in unselected formats. `run` also refreshes existing report files after each model and on success, failure or interruption. Use a new report directory for a clean output set.
 
 ## The 15-column table
 
@@ -102,7 +104,7 @@ For LFW, `view_count` records the actual input views. `run` stores `samples` as 
 
 ## Exclusions and verification
 
-Failed, unexecuted, unverifiable or metric-less results get no numerical row, and `raw_data.metadata.json` records why. A valid INT8 measurement without a compatible FP32 denominator still appears, with blank recovery. Partial evaluations go to the partial files instead of being excluded. Partial LFW artifacts are rejected with instructions to use the archive branch, rather than being converted into accuracy rows.
+Failed, unexecuted, unverifiable or metric-less results get no numerical row, and `raw_data.metadata.json` records why. A valid INT8 measurement without a compatible FP32 denominator still appears, with blank recovery. Partial evaluations go to the partial files instead of being excluded. Partial LFW artifacts are rejected. Prepare a new full LFW evaluation.
 
 - `report` checks the saved configuration, completion markers and attested file hashes.
 - `reproduce report` also checks the sealed run and prepared manifests and each result's input, recipe, profile and graph bindings. A tampered result or a mismatched package stops the export.

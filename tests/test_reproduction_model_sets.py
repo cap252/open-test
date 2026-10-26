@@ -26,6 +26,61 @@ class ReproductionModelSetTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
 
+    def test_configs_reject_missing_templates_before_creating_output(self):
+        source = catalog()
+        source["entries"] = [e for e in source["entries"] if e["model"] == "resnet18"][
+            :2
+        ]
+        model = source["entries"][0]["model"]
+        condition = source["entries"][1]["condition"]
+        for case in ("absent", "invalid", "model", "conditions", "condition"):
+            with self.subTest(case=case):
+                selected = copy.deepcopy(source)
+                if case == "absent":
+                    del selected["training_templates"]
+                    message = "training_templates"
+                elif case == "invalid":
+                    selected["training_templates"] = []
+                    message = "training_templates"
+                elif case == "model":
+                    del selected["training_templates"][model]
+                    message = "Missing training template for model: " + model
+                else:
+                    if case == "conditions":
+                        selected["training_templates"][model]["conditions"] = None
+                    else:
+                        del selected["training_templates"][model]["conditions"][
+                            condition
+                        ]
+                    message = "Missing training template condition: " + model + "/"
+                selection = self.root / "selection.json"
+                atomic_json(selection, selected)
+                before = selection.read_bytes()
+                output = self.root / "configs"
+                with self.assertRaisesRegex(ValueError, message):
+                    configs(selection=selection, output=output)
+                self.assertFalse(output.exists())
+                error = io.StringIO()
+                with (
+                    contextlib.redirect_stderr(error),
+                    self.assertRaises(SystemExit) as raised,
+                ):
+                    main(
+                        [
+                            "reproduce",
+                            "configs",
+                            "--selection",
+                            str(selection),
+                            "--output",
+                            str(output),
+                        ]
+                    )
+                self.assertEqual(2, raised.exception.code)
+                self.assertIn(message, error.getvalue())
+                self.assertNotIn("Traceback", error.getvalue())
+                self.assertFalse(output.exists())
+                self.assertEqual(before, selection.read_bytes())
+
     def test_default_preparation_preserves_exact_selected_entries(self):
         original = catalog()
         before = object_hash(original)

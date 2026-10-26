@@ -135,7 +135,7 @@ def run(
                 _run_model(name, config, paths, out, ort, code, force, status)
                 status["models"][name]["state"] = "completed"
                 atomic_json(out / "status.json", status)
-                report(out, formats=formats, table_profile=table_profile)
+                _refresh_reports(out, formats, table_profile)
         except BaseException as error:
             status["state"] = (
                 "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
@@ -149,33 +149,19 @@ def run(
                     if condition["state"] == "running":
                         condition.update(state=status["state"], error=status["error"])
             atomic_json(out / "status.json", status)
-            # Refresh existing reports too, even when this attempt selects fewer formats.
-            existing = {
-                p.suffix[1:]
-                for stem in (
-                    "results",
-                    "metrics",
-                    "summary",
-                    "records",
-                    "raw_data",
-                    "raw_data.partial",
-                )
-                for p in out.glob(stem + ".*")
-                if p.suffix[1:] in {"csv", "tsv", "json", "md"}
-            }
-            profiles = {table_profile}
-            if any((out / ("results." + ext)).exists() for ext in ("csv", "tsv")):
-                profiles.add(None)
-            if (out / "raw_data.metadata.json").exists():
-                profiles.add("opennpu_raw")
             # A report failure must not hide the original execution error.
-            for profile in sorted(profiles, key=lambda p: p or ""):
-                with contextlib.suppress(Exception):
-                    report(out, formats=formats | existing, table_profile=profile)
+            with contextlib.suppress(Exception):
+                _refresh_reports(out, formats, table_profile)
             raise
         status.update(state="completed", finished=now())
         atomic_json(out / "status.json", status)
-        return report(out, formats=formats, table_profile=table_profile)
+        return _refresh_reports(out, formats, table_profile)
+
+
+def _refresh_reports(directory, formats, table_profile):
+    return report(
+        directory, formats=formats, table_profile=table_profile, _refresh_existing=True
+    )
 
 
 def _run_model(name, config, paths, out, ort, code, force, status):

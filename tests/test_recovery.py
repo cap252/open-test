@@ -87,6 +87,35 @@ class RecoveryTests(unittest.TestCase):
                     )
         rows, _ = tables([record(value=0), record("q", 0.5)])
         self.assertTrue(all(r["recovery_pct"] is None for r in rows))
+        self.assertEqual(
+            ["zero_fp32_denominator"] * 2, [r["pairing_reason"] for r in rows]
+        )
+
+    def test_pairing_reasons_identify_failed_and_unverified_side(self):
+        for side in ("measurement", "baseline"):
+            for changes, reason in (
+                ({"state": "failed"}, "state:failed"),
+                ({"state": "interrupted"}, "state:interrupted"),
+                ({"evidence": {}}, "unverified_result"),
+            ):
+                with self.subTest(side=side, reason=reason):
+                    base, quantized = record(), record("q", 0.78)
+                    (quantized if side == "measurement" else base).update(changes)
+                    row = tables([base, quantized])[0][1]
+                    self.assertEqual(side + ":" + reason, row["pairing_reason"])
+                    self.assertIsNone(row["recovery_pct"])
+                    if side == "baseline":
+                        self.assertEqual(78.0, row["value_pct"])
+        base, quantized = record(state="failed"), record("q", state="failed")
+        self.assertEqual(
+            "measurement:state:failed",
+            tables([base, quantized])[0][1]["pairing_reason"],
+        )
+        base["quantization"] = quantized["quantization"]
+        self.assertEqual(
+            "mismatch:baseline_is_not_FP32",
+            tables([base, quantized])[0][1]["pairing_reason"],
+        )
 
     def test_invalid_numbers_are_rejected(self):
         for invalid in (float("nan"), float("inf"), -float("inf"), True, "0.8"):

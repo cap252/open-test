@@ -26,6 +26,45 @@ from tests.library_fixtures import toy_model, feeds
 
 
 class PublicDocumentationTests(unittest.TestCase):
+    def test_evaluate_rejects_incomplete_sample_stream_before_finalizing(self):
+        from tests.library_fixtures import samples
+
+        items = list(samples())
+        for expected, limit in ((4, None), (4, 3)):
+            with self.subTest(expected=expected, limit=limit):
+                evaluator = api.TopKClassification()
+                with patch.object(
+                    evaluator, "finalize", wraps=evaluator.finalize
+                ) as finish:
+                    with self.assertRaisesRegex(
+                        ValueError, "Missing evaluation samples"
+                    ):
+                        api.evaluate(
+                            toy_model(),
+                            iter(items[:2]),
+                            evaluator=evaluator,
+                            expected_samples=expected,
+                            limit=limit,
+                        )
+                    finish.assert_not_called()
+        full = api.evaluate(
+            toy_model(),
+            iter(items),
+            evaluator=api.TopKClassification(),
+            expected_samples=4,
+        )
+        self.assertTrue(full.complete)
+        self.assertEqual(4, full.samples)
+        partial = api.evaluate(
+            toy_model(),
+            iter(items),
+            evaluator=api.TopKClassification(),
+            expected_samples=4,
+            limit=2,
+        )
+        self.assertFalse(partial.complete)
+        self.assertEqual(2, partial.samples)
+
     def test_public_names_and_signatures_are_preserved(self):
         expected = json.loads(
             (Path(__file__).parent / "fixtures/public_api_signatures.json").read_text()

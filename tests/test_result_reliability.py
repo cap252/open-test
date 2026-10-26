@@ -1,6 +1,10 @@
 """F01/F02: exercise actual local model execution, persistence and reporting."""
 
 import copy
+import csv
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -123,6 +127,223 @@ def fixture(root, *, external=False, host=None):
 
 
 class ResultReliabilityTests(unittest.TestCase):
+    def test_success_refreshes_existing_files_without_cross_product(self):
+        from opennpu_quant.report import report
+
+        with tempfile.TemporaryDirectory() as temp:
+            paths, config = fixture(Path(temp))
+            manifest = paths.data / "imagenet/manifest.json"
+            data = read_json(manifest)
+            data["validation"][1]["target"] = 0
+            atomic_json(manifest, data)
+            config["evaluation"]["limit"] = 1
+            run(config, paths, formats="csv,tsv,json,md")
+            output = paths.runs / config["name"]
+            report(output, formats="csv", table_profile="opennpu_raw")
+            inventory = {p.name for p in output.iterdir() if p.is_file()}
+
+            def check(expected, samples):
+                for suffix, delimiter in (("csv", ","), ("tsv", "\t")):
+                    for stem in ("results", "metrics"):
+                        with (output / (stem + "." + suffix)).open(
+                            encoding="utf-8-sig", newline=""
+                        ) as stream:
+                            rows = list(csv.DictReader(stream, delimiter=delimiter))
+                        self.assertTrue(rows)
+                        if stem == "results":
+                            self.assertEqual(2, len(rows))
+                            self.assertTrue(
+                                all(float(r["fp32_accuracy"]) == expected for r in rows)
+                            )
+                        else:
+                            top1 = [r for r in rows if r["metric"] == "top1"]
+                            self.assertEqual(2, len(top1))
+                            self.assertTrue(
+                                all(float(r["value"]) == expected / 100 for r in top1)
+                            )
+                raw = []
+                for stem in ("raw_data", "raw_data.partial"):
+                    with (output / (stem + ".csv")).open(
+                        encoding="utf-8-sig", newline=""
+                    ) as stream:
+                        raw.extend(csv.DictReader(stream))
+                self.assertEqual(2, len(raw))
+                self.assertTrue(all(float(r["fp32_accuracy"]) == expected for r in raw))
+                summary = read_json(output / "summary.json")
+                self.assertEqual(2, len(summary["rows"]))
+                self.assertTrue(
+                    all(
+                        r["value_pct"] == expected and r["samples"] == samples
+                        for r in summary["rows"]
+                    )
+                )
+                records = read_json(output / "records.json")["records"]
+                self.assertTrue(
+                    all(
+                        r["metrics"]["top1"]["value"] == expected / 100 for r in records
+                    )
+                )
+                self.assertIn(f"{expected:.4f}", (output / "summary.md").read_text())
+                self.assertEqual(
+                    inventory, {p.name for p in output.iterdir() if p.is_file()}
+                )
+                self.assertFalse((output / "raw_data.tsv").exists())
+                self.assertFalse((output / "raw_data.partial.tsv").exists())
+
+            check(100.0, 1)
+            config["evaluation"]["limit"] = 2
+            run(config, paths, force=True, formats="csv", table_profile="opennpu_raw")
+            check(50.0, 2)
+            with (
+                patch(
+                    "opennpu_quant.runner.calibrate",
+                    side_effect=AssertionError("calibration reused"),
+                ),
+                patch(
+                    "opennpu_quant.runner.quantize",
+                    side_effect=AssertionError("model reused"),
+                ),
+                patch(
+                    "opennpu_quant.runner.evaluate",
+                    side_effect=AssertionError("evaluation reused"),
+                ),
+            ):
+                run(config, paths, formats="csv", table_profile="opennpu_raw")
+            check(50.0, 2)
+            config["evaluation"]["limit"] = 1
+            run(config, paths, force=True, formats="csv")
+            check(100.0, 1)
+
+    def test_model_progress_refreshes_reports_before_next_model_starts(self):
+        from opennpu_quant.runner import _run_model
+
+        with tempfile.TemporaryDirectory() as temp:
+            paths, config = fixture(Path(temp))
+            shutil.copytree(paths.models / "toy", paths.models / "other")
+            recipe = paths.models / "other/recipe.yaml"
+            content = yaml.safe_load(recipe.read_text())
+            content["name"] = "other"
+            recipe.write_text(yaml.safe_dump(content))
+            config["models"].append("other")
+            config["percentiles"]["other"] = dict(config["percentiles"]["toy"])
+            config["conditions"] = {"fp32": {}}
+            config["evaluation"]["limit"] = 1
+            manifest = paths.data / "imagenet/manifest.json"
+            data = read_json(manifest)
+            data["validation"][1]["target"] = 0
+            atomic_json(manifest, data)
+            run(config, paths, formats="csv,tsv,json")
+            output = paths.runs / config["name"]
+            config["evaluation"]["limit"] = 2
+            observed = []
+
+            def inspect_progress(name, *args):
+                if name == "other":
+                    with (output / "results.tsv").open(newline="") as stream:
+                        rows = list(csv.DictReader(stream, delimiter="\t"))
+                    self.assertEqual(2, len(rows))
+                    self.assertCountEqual(
+                        ["", "50.0"], [r["fp32_accuracy"] for r in rows]
+                    )
+                    summary = read_json(output / "summary.json")["rows"]
+                    by_model = {r["model"]: r for r in summary}
+                    self.assertEqual(50.0, by_model["toy"]["value_pct"])
+                    self.assertIsNone(by_model["other"]["value_pct"])
+                    status = read_json(output / "status.json")["models"]
+                    self.assertEqual("completed", status["toy"]["state"])
+                    observed.append(name)
+                return _run_model(name, *args)
+
+            with patch("opennpu_quant.runner._run_model", side_effect=inspect_progress):
+                run(config, paths, force=True, formats="csv")
+            self.assertEqual(["other"], observed)
+
+    def test_failed_and_interrupted_reruns_refresh_all_existing_reports(self):
+        from opennpu_quant.report import report
+
+        for error, state in (
+            (RuntimeError("evaluation failed"), "failed"),
+            (KeyboardInterrupt(), "interrupted"),
+        ):
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temp:
+                paths, config = fixture(Path(temp))
+                config["conditions"] = {"fp32": {}}
+                run(config, paths, formats="csv,tsv,json,md")
+                output = paths.runs / config["name"]
+                report(output, formats="csv", table_profile="opennpu_raw")
+                inventory = {p.name for p in output.iterdir() if p.is_file()}
+                with (
+                    patch("opennpu_quant.runner.evaluate", side_effect=error),
+                    self.assertRaises(type(error)),
+                ):
+                    run(
+                        config,
+                        paths,
+                        force=True,
+                        formats="csv",
+                        table_profile="opennpu_raw",
+                    )
+                self.assertEqual(state, read_json(output / "status.json")["state"])
+                row = read_json(output / "summary.json")["rows"][0]
+                self.assertFalse(row["complete"])
+                self.assertIsNone(row["value_pct"])
+                for suffix, delimiter in (("csv", ","), ("tsv", "\t")):
+                    with (output / ("results." + suffix)).open(
+                        encoding="utf-8-sig", newline=""
+                    ) as stream:
+                        rows = list(csv.DictReader(stream, delimiter=delimiter))
+                    self.assertEqual(1, len(rows))
+                    self.assertEqual("", rows[0]["fp32_accuracy"])
+                for stem in ("raw_data", "raw_data.partial"):
+                    with (output / (stem + ".csv")).open(
+                        encoding="utf-8-sig", newline=""
+                    ) as stream:
+                        self.assertEqual([], list(csv.DictReader(stream)))
+                self.assertNotIn("100.0000", (output / "summary.md").read_text())
+                self.assertEqual(
+                    inventory, {p.name for p in output.iterdir() if p.is_file()}
+                )
+
+    def test_cli_corrupt_image_is_a_user_error_without_completed_result(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            paths, config = fixture(root)
+            config["conditions"] = {"fp32": {}}
+            image = root / "images/2.png"
+            image.write_bytes(b"not an image")
+            settings = root / "experiment.yaml"
+            settings.write_text(yaml.safe_dump(config))
+            output = root / "failed-run"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-B",
+                    "-m",
+                    "opennpu_quant",
+                    "run",
+                    "-c",
+                    str(settings),
+                    "--models-dir",
+                    str(paths.models),
+                    "--data-dir",
+                    str(paths.data),
+                    "--cache-dir",
+                    str(paths.cache),
+                    "--output",
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(2, result.returncode, result.stderr)
+            self.assertIn("UnidentifiedImageError", result.stderr)
+            self.assertIn(str(image), result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            output = output / config["name"]
+            self.assertEqual("failed", read_json(output / "status.json")["state"])
+            self.assertFalse((output / "toy/fp32/complete.json").exists())
+            self.assertFalse((output / "toy/fp32/result.json").exists())
+
     def test_report_format_changes_reuse_completed_measurements(self):
         with tempfile.TemporaryDirectory() as temp:
             paths, config = fixture(Path(temp))
@@ -152,7 +373,6 @@ class ResultReliabilityTests(unittest.TestCase):
 
     def test_corrupt_completion_evidence_refreshes_existing_reports(self):
         from opennpu_quant.report import report
-        import csv
 
         with tempfile.TemporaryDirectory() as temp:
             paths, config = fixture(Path(temp))

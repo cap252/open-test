@@ -134,6 +134,58 @@ class SourceArchiveTests(unittest.TestCase):
                 self.assertEqual(b"added", extra.read_bytes())
                 extra.unlink()
 
+    def test_pinned_bytecode_is_verified_and_extra_sources_explain_recovery(self):
+        recipe = self.archive_recipe(
+            ("upstream/__pycache__/model.cpython-311.pyc", b"pinned bytecode")
+        )
+        source = checkout_archive(recipe, self.root)
+        pinned = source / "__pycache__/model.cpython-311.pyc"
+        self.assertEqual(b"pinned bytecode", pinned.read_bytes())
+        self.assertEqual(source, checkout_archive(recipe, self.root))
+        pinned.write_bytes(b"changed bytecode")
+        with self.assertRaisesRegex(ValueError, "changed"):
+            checkout_archive(recipe, self.root)
+        self.assertEqual(b"changed bytecode", pinned.read_bytes())
+        pinned.write_bytes(b"pinned bytecode")
+        (source / "stray.py").write_text("stray = True")
+        with self.assertRaisesRegex(
+            ValueError, "Unpinned upstream import source: stray.py"
+        ) as raised:
+            checkout_archive(recipe, self.root)
+        message = str(raised.exception)
+        self.assertIn("Move aside the managed source directory", message)
+        self.assertIn(str(self.folder), message)
+        self.assertIn(str(self.archive), message)
+        backup = self.folder.with_name("saved-source")
+        self.folder.rename(backup)
+        self.assertEqual(source, checkout_archive(recipe, self.root))
+        self.assertFalse((source / "stray.py").exists())
+        self.assertTrue(
+            (backup / source.relative_to(self.folder) / "stray.py").is_file()
+        )
+        self.assertEqual(recipe["source"]["archive_sha256"], sha256(self.archive))
+
+    def test_explicit_source_recovery_requires_clean_pinned_source(self):
+        recipe = self.archive_recipe()
+        explicit = self.root / "explicit"
+        extract_archive(self.archive, explicit)
+        # Explicit source layout contains the files rather than the ZIP root.
+        explicit = explicit / "upstream"
+        explicit.with_suffix(".zip").write_bytes(self.archive.read_bytes())
+        self.assertEqual(explicit, checkout_archive(recipe, self.root, explicit))
+        stray = explicit / "stray.py"
+        stray.write_text("stray = True")
+        with self.assertRaisesRegex(
+            ValueError, "Unpinned upstream import source: stray.py"
+        ) as raised:
+            checkout_archive(recipe, self.root, explicit)
+        self.assertIn(
+            "--source-dir with a clean source directory at the pinned revision",
+            str(raised.exception),
+        )
+        self.assertNotIn("managed source", str(raised.exception))
+        self.assertEqual("stray = True", stray.read_text())
+
     def test_git_ignored_import_files_are_also_rejected(self):
         import subprocess
         from opennpu_quant.export.torch_models import checkout

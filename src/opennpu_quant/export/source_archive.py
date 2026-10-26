@@ -33,7 +33,16 @@ def _documentation_links(source):
     }
 
 
-def verify_source_files(target, expected):
+def source_recovery_hint(target, *, explicit, archive=None):
+    if explicit:
+        return "Use --source-dir with a clean source directory at the pinned revision."
+    hint = f"Move aside the managed source directory '{target}' and rerun export to recreate it."
+    if archive is not None:
+        hint += f" Keep the pinned ZIP archive '{archive}'."
+    return hint
+
+
+def verify_source_files(target, expected, *, recovery_hint=None):
     """Reject additional importable files, including ignored Git files and bytecode."""
     for root, directories, files in os.walk(target, followlinks=False):
         directories[:] = [name for name in directories if name != ".git"]
@@ -49,10 +58,13 @@ def verify_source_files(target, expected):
                 ".so",
                 ".pyd",
             ):
-                raise ValueError("Unpinned upstream import source: " + relative)
+                hint = recovery_hint or source_recovery_hint(target, explicit=True)
+                raise ValueError(
+                    "Unpinned upstream import source: " + relative + ". " + hint
+                )
 
 
-def _verify(zipped, target, text_links):
+def _verify(zipped, target, text_links, *, recovery_hint=None):
     roots, missing, links, expected = set(), [], set(), set()
     for info in zipped.infolist():
         name = PurePosixPath(info.filename)
@@ -77,7 +89,7 @@ def _verify(zipped, target, text_links):
             raise ValueError("Pinned upstream source changed: " + str(rel))
     if len(roots) != 1 or links != set(text_links):
         raise ValueError("Pinned source archive layout changed")
-    verify_source_files(target, expected)
+    verify_source_files(target, expected, recovery_hint=recovery_hint)
     if missing:
         raise FileNotFoundError("Missing pinned source: " + missing[0])
 
@@ -98,10 +110,13 @@ def checkout_archive(recipe, directory, explicit=None):
     if sha256(archive) != source["archive_sha256"]:
         raise ValueError("Upstream source archive checksum mismatch")
     text_links = _documentation_links(source)
+    hint = source_recovery_hint(
+        explicit or folder, explicit=explicit is not None, archive=archive
+    )
     with zipfile.ZipFile(archive) as zipped:
         if explicit:
             target = Path(explicit).resolve()
-            _verify(zipped, target, text_links)
+            _verify(zipped, target, text_links, recovery_hint=hint)
         else:
             with RunLock(folder.with_suffix(".extract.lock")):
                 roots = {PurePosixPath(n).parts[0] for n in zipped.namelist()}
@@ -110,14 +125,14 @@ def checkout_archive(recipe, directory, explicit=None):
                 root = next(iter(roots))
                 target = (folder / root).resolve()
                 try:
-                    _verify(zipped, target, text_links)
+                    _verify(zipped, target, text_links, recovery_hint=hint)
                 except FileNotFoundError:
                     with tempfile.TemporaryDirectory(
                         prefix=folder.name + ".pending-", dir=folder.parent
                     ) as temp:
                         pending = Path(temp) / "source"
                         extract_archive(archive, pending, text_links=text_links)
-                        _verify(zipped, pending / root, text_links)
+                        _verify(zipped, pending / root, text_links, recovery_hint=hint)
                         previous = Path(temp) / "incomplete"
                         if folder.exists():
                             folder.rename(previous)

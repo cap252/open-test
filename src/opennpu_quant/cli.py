@@ -234,7 +234,7 @@ def build_parser():
         "--validation",
         choices=("strict", "functional"),
         default="strict",
-        help="Both modes report framework numerical differences without rejecting export. Graph integrity checks remain mandatory",
+        help="Compatibility option: both values use the same checks and record finite framework differences. Graph integrity checks remain mandatory",
     )
     export.set_defaults(handler=_export)
 
@@ -358,7 +358,7 @@ def main(argv=None):
     except tuple(FILESYSTEM_HINTS) as error:
         hint = FILESYSTEM_HINTS[type(error)]
         parser.exit(2, f"{type(error).__name__}: {error}. {hint}\n")
-    except (ValueError, RuntimeError, FileNotFoundError, ImportError) as error:
+    except (ValueError, RuntimeError, OSError, ImportError) as error:
         parser.exit(2, f"{type(error).__name__}: {error}\n")
 
 

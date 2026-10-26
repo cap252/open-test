@@ -40,7 +40,7 @@ def verify_artifacts(directory, proof):
     )
 
 
-def report(directory, *, formats=None, table_profile=None):
+def report(directory, *, formats=None, table_profile=None, _refresh_existing=False):
     """Compare matched FP32 denominators without treating missing results as zero."""
     selected_formats = normalize_formats(formats)
     directory = Path(directory)
@@ -70,6 +70,7 @@ def report(directory, *, formats=None, table_profile=None):
             "report_policy": policy,
         },
         summary=result,
+        _refresh_existing=_refresh_existing,
     )
     if table_profile:
         from .raw_report import build_report

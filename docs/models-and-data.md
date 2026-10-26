@@ -109,7 +109,7 @@ LFW smoke manifests and partial results are not accepted for execution, reportin
 opennpu-quant export resnet18
 ```
 
-Export verifies the recipe's pinned checkpoint and source, then creates the ONNX bundle. Both `strict` (default) and `functional` report finite framework-to-ONNX differences in the console and `model.json` without rejecting export. Shape, dtype, non-finite output, graph conversion, partition and Release contract errors still stop export.
+Export verifies the recipe's pinned checkpoint and source, then creates the ONNX bundle. `strict` (default) and `functional` are compatibility choices with the same checks. Both report finite framework-to-ONNX differences in the console and `model.json` without rejecting export. Shape, dtype, non-finite output, graph conversion, partition and Release contract errors still stop export.
 
 Export checks use CPU fixtures and do not establish GPU execution or full-dataset accuracy. For GPU evaluation, run the exported network with `--device cuda:0`. Host graphs remain on CPU.
 

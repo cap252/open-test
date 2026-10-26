@@ -34,10 +34,27 @@ def configs(*, output, selection=None, model_set=None, models=None, conditions=N
     output = Path(output)
     if output.exists():
         raise FileExistsError(output)
-    values = [
-        (e, training_config(e, source["training_templates"][e["model"]]))
-        for e in entries
-    ]
+    templates = source.get("training_templates")
+    if not isinstance(templates, dict):
+        raise ValueError(
+            "Selection has no training_templates. Config generation requires the "
+            "original training settings; use reproduce prepare/run to evaluate fixed models."
+        )
+    values = []
+    for entry in entries:
+        model, condition = entry["model"], entry["condition"]
+        template = templates.get(model)
+        if not isinstance(template, dict):
+            raise ValueError("Missing training template for model: " + model)
+        available_conditions = template.get("conditions")
+        if (
+            not isinstance(available_conditions, dict)
+            or condition not in available_conditions
+        ):
+            raise ValueError(
+                "Missing training template condition: " + model + "/" + condition
+            )
+        values.append((entry, training_config(entry, template)))
     output.mkdir(parents=True)
     rows = []
     for entry, config in values:

@@ -123,17 +123,26 @@ def build_report(records, *, profile="opennpu_raw"):
 
 
 def write_report(report, directory, *, source=None, formats=None):
-    selected = normalize_formats(formats)
+    return _write_report(
+        report, directory, source=source, selected=normalize_formats(formats)
+    )
+
+
+def _write_report(report, directory, *, source, selected, refresh_existing=False):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     for group, name in (("full", "raw_data"), ("partial", "raw_data.partial")):
-        if "csv" in selected:
+        if "csv" in selected or (
+            refresh_existing and (directory / (name + ".csv")).is_file()
+        ):
             _text(
                 directory / (name + ".csv"),
                 table_text(report[group], delimiter=","),
                 "utf-8-sig",
             )
-        if "tsv" in selected:
+        if "tsv" in selected or (
+            refresh_existing and (directory / (name + ".tsv")).is_file()
+        ):
             _text(directory / (name + ".tsv"), table_text(report[group]), "utf-8")
     metadata = dict(report["metadata"], source=source or {})
     atomic_json(directory / "raw_data.metadata.json", metadata)

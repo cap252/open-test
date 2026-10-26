@@ -8,7 +8,7 @@ A result answers one of three questions, and each question needs its own evidenc
 
 1. **Did it run?** A `completed` state, a written report or a passing `demo` shows that the pipeline executes.
 2. **Does it match a reference?** Agreement is checked separately for raw tensors, predictions and metrics. Agreement at one level does not imply agreement at another, and a comparison without a reference stays `pending`.
-3. **What is the benchmark accuracy?** A run on a few samples (`--limit`, `demo`) measures accuracy only on that subset and does not represent the benchmark. Benchmark accuracy comes from a full evaluation, for example all 50,000 ImageNet images or all 5,000 COCO images. The default table is `results.csv`; `--table-profile opennpu_raw` separates full and partial evaluations into `raw_data.csv` and `raw_data.partial.csv`. LFW supports full 6,000-pair evaluation only ([LFW](models-and-data.md#lfw)).
+3. **What is the benchmark accuracy?** A run on a few samples (`--limit`, `demo`) measures accuracy only on that subset and does not represent the benchmark. Benchmark accuracy comes from a full evaluation, for example all 50,000 ImageNet images or all 5,000 COCO images. The default table is `results.csv`. `--table-profile opennpu_raw` separates full and partial evaluations into `raw_data.csv` and `raw_data.partial.csv`. LFW supports full 6,000-pair evaluation only ([LFW](models-and-data.md#lfw)).
 
 CPU runs check functionality, and their numbers can differ from GPU runs. When a requested GPU run fails, the tool records the failure instead of substituting a CPU result.
 

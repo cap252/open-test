@@ -1,6 +1,6 @@
 # Configuration reference
 
-Start with a supplied experiment YAML, select the models and conditions you want, and change only the settings your experiment needs. The examples below use `run`; settings for fixed-model `reproduce` are explained under [Use the original per-model settings](#use-the-original-per-model-settings).
+Start with a supplied experiment YAML, select the models and conditions you want, and change only the settings your experiment needs. The examples below use `run`. Settings for fixed-model `reproduce` are explained under [Use the original per-model settings](#use-the-original-per-model-settings).
 
 <a id="use-a-preset-or-an-experiment-file"></a>
 
@@ -19,20 +19,20 @@ The repository includes complete experiment YAML files:
 opennpu-quant run -c cnn30 --dry-run
 ```
 
-For settings with CLI options, combine the preset with those options; no new YAML or JSON is needed. The [common settings](#common-settings) and [multiple-model example](#run-multiple-models-and-conditions) show this approach. To save your own settings or change an option that has no CLI flag, copy a preset and edit it. From the repository root:
+For settings with CLI options, combine the preset with those options. No new YAML or JSON is needed. The [common settings](#common-settings) and [multiple-model example](#run-multiple-models-and-conditions) show this approach. To save your own settings or change an option that has no CLI flag, copy a preset and edit it. From the repository root:
 
 ```bash
 cp src/opennpu_quant/resources/experiments/cnn30.yaml experiment.yaml
 opennpu-quant run -c experiment.yaml --dry-run
 ```
 
-The file selected with `-c` must contain the required experiment settings. A file containing only changed keys is not automatically filled from a preset. You can keep editing your own copy; a new file is not required for each change. Use a new `name` or `--output` when changing a completed experiment so its saved results remain separate.
+The file selected with `-c` must contain the required experiment settings. A file containing only changed keys is not automatically filled from a preset. You can keep editing your own copy. A new file is not required for each change. Use a new `name` or `--output` when changing a completed experiment so its saved results remain separate.
 
 If you installed only the package, [Example: change a percentile](#example-change-a-percentile) shows how to load and edit the full preset through Python. The same approach works for other supported experiment settings.
 
 ## Common settings
 
-An experiment file can describe several models and conditions. These are useful starting points; the [detailed settings](#detailed-settings) cover less common options.
+An experiment file can describe several models and conditions. These are useful starting points. The [detailed settings](#detailed-settings) cover less common options.
 
 | What to change | Experiment key | Command-line option |
 |---|---|---|
@@ -40,10 +40,10 @@ An experiment file can describe several models and conditions. These are useful 
 | Conditions to apply | `conditions` | `--conditions fp32,pot_rtn`, using names defined in the experiment |
 | Execution device | `runtime.device` | `--device cuda:0` or `--device cpu` |
 | Calibration input count | `calibration.samples.<dataset>` | `--calibration-samples 8` sets the count for every dataset |
-| Evaluation sample count | `evaluation.limit` | `--limit 3` for an image-based check; full evaluation uses `null` in YAML |
+| Evaluation sample count | `evaluation.limit` | `--limit 3` for an image-based check. Full evaluation uses `null` in YAML |
 | Save generated INT8 ONNX files | `output.save_qdq_models` | `--save-models` |
 
-Calibration inputs determine quantization ranges; evaluation inputs measure accuracy. Set these counts separately. LFW evaluates face pairs and requires all 6,000 pairs, so a three-image limit is not applicable to that model. A small evaluation checks execution; use the full evaluation set to measure accuracy.
+Calibration inputs determine quantization ranges. Evaluation inputs measure accuracy. Set these counts separately. LFW evaluates face pairs and requires all 6,000 pairs, so a three-image limit is not applicable to that model. A small evaluation checks execution. Use the full evaluation set to measure accuracy.
 
 The keys control concrete stages of execution: `models` selects the outer loop, `conditions` selects the work for each model, and the remaining settings configure calibration, quantization and evaluation. Model-specific input and output rules come from model recipes, so a separate experiment file for every model is unnecessary.
 
@@ -58,9 +58,9 @@ opennpu-quant run -c cnn30 --models resnet18,resnet50 \
 
 `--dry-run` validates and prints the effective configuration and paths. It does not check whether model files, datasets or the output directory are ready. After [preparing models and data](models-and-data.md), remove `--dry-run` to execute the four combinations. This example retains the preset's full evaluation scope.
 
-Execution visits each selected model in order and then each selected condition. Results are stored under `<output>/<experiment name>/<model>/<condition>`; here, for example, `workspace/two-model-runs/cnn30/resnet18/pot_rtn`. When `--conditions` is used, the CLI includes the FP32 baseline automatically if it was omitted and is defined in the experiment.
+Execution visits each selected model in order and then each selected condition. Results are stored under `<output>/<experiment name>/<model>/<condition>`, for example, `workspace/two-model-runs/cnn30/resnet18/pot_rtn`. When `--conditions` is used, the CLI includes the FP32 baseline automatically if it was omitted and is defined in the experiment.
 
-An error stops `run`. Running the same configuration again can reuse verified completed results; it does not necessarily repeat every measurement. See [Reuse and caching](run-pipeline.md#reuse-and-caching) for rerunning or changing an experiment.
+An error stops `run`. Running the same configuration again can reuse verified completed results. It does not necessarily repeat every measurement. See [Reuse and caching](run-pipeline.md#reuse-and-caching) for rerunning or changing an experiment.
 
 <a id="where-settings-live"></a>
 
@@ -71,21 +71,21 @@ Use this table to choose the file or option for the change you want to make.
 | What to change | Where to change it |
 |---|---|
 | Models, quantization conditions, calibration counts and evaluation scope | Experiment YAML/JSON selected with `-c`, or a supported `run` option |
-| A model's input size, preprocessing or output interpretation | Model recipe; the packaged files are in `resources/models/*.yaml`, and an exported bundle can have a local `recipe.yaml` |
-| Model, data, cache and result directories | Path options or the optional `opennpu_quant.local.yaml` file; see [Workspace paths](#workspace-paths) |
+| A model's input size, preprocessing or output interpretation | Model recipe. The packaged files are in `resources/models/*.yaml`, and an exported bundle can have a local `recipe.yaml` |
+| Model, data, cache and result directories | Path options or the optional `opennpu_quant.local.yaml` file. See [Workspace paths](#workspace-paths) |
 | Local locations of the supplied files used by `reproduce` | `bindings.json`, which connects recorded asset locations to your server |
 
 For example, changing a percentile in an experiment file changes the INT8 model created by `run`. Fixed-model `reproduce` uses the supplied files and recorded settings. Editing the experiment YAML does not change those files or settings. Reports use the settings saved at execution time, so editing a preset also leaves existing evaluations unchanged.
 
 ## Detailed settings
 
-Use the following sections when you need an option beyond the common settings. Tables distinguish preset values from defaults supplied by configuration objects. Unqualified scheme defaults refer to `Scheme`; they may differ from a preset's explicit values. A listed default does not mean every YAML key can be omitted, which is why copying a complete preset is the starting point.
+Use the following sections when you need an option beyond the common settings. Tables distinguish preset values from defaults supplied by configuration objects. Unqualified scheme defaults refer to `Scheme`. They may differ from a preset's explicit values. A listed default does not mean every YAML key can be omitted, which is why copying a complete preset is the starting point.
 
 ### Command-line overrides
 
 The experiment file is validated when loaded. Supported CLI options replace the corresponding values, and the effective configuration is validated again. Options that select several models or datasets can update more than one key.
 
-A local `recipe.yaml` supplies the model bundle's input and graph settings. Packaged models still use their packaged evaluation profile by default; choose another profile explicitly with `evaluation.profiles.<model>` or `--evaluation-profile`. See [Precedence and local recipes](evaluation-profiles.md#precedence-and-local-recipes).
+A local `recipe.yaml` supplies the model bundle's input and graph settings. Packaged models still use their packaged evaluation profile by default. Choose another profile explicitly with `evaluation.profiles.<model>` or `--evaluation-profile`. See [Precedence and local recipes](evaluation-profiles.md#precedence-and-local-recipes).
 
 | Option | Configuration key |
 |---|---|
@@ -105,7 +105,7 @@ Environment variables such as `OMP_NUM_THREADS`, `MKL_NUM_THREADS` and `OPENBLAS
 
 ### Workspace paths
 
-A local path file is optional. Paths resolve per key in this order: CLI option, environment variable, local YAML, then the default derived from home. The default local filename is `opennpu_quant.local.yaml`; `--local-config` selects another file. Relative paths resolve from the working directory. Local `datasets.<name>` settings override only the image root recorded in a dataset manifest.
+A local path file is optional. Paths resolve per key in this order: CLI option, environment variable, local YAML, then the default derived from home. The default local filename is `opennpu_quant.local.yaml`. `--local-config` selects another file. Relative paths resolve from the working directory. Local `datasets.<name>` settings override only the image root recorded in a dataset manifest.
 
 | Directory | CLI | Environment variable | Default |
 |---|---|---|---|
@@ -139,7 +139,7 @@ The manifest written by `data prepare` defines the files, annotations, calibrati
 
 ### Quantization and AdaRound
 
-These keys belong to the experiment file. Some keys abbreviate a repeated prefix with a leading dot; for example, `.weight_granularity` means `schemes.<family>.weight_granularity`.
+These keys belong to the experiment file. Some keys abbreviate a repeated prefix with a leading dot. For example, `.weight_granularity` means `schemes.<family>.weight_granularity`.
 
 | Key | Default and allowed values | Effect of a change |
 | --- | --- | --- |
@@ -164,7 +164,7 @@ These keys belong to the experiment file. Some keys abbreviate a repeated prefix
 
 ### Postprocessing, evaluation and reporting
 
-`decode.*` belongs to the model recipe. Other configuration keys below belong to the experiment; `--table-profile` is a report command option.
+`decode.*` belongs to the model recipe. Other configuration keys below belong to the experiment. `--table-profile` is a report command option.
 
 `run` and `reproduce` use the same model-specific evaluation profiles by default. `--evaluation-profile` is a comparison option for `run`, explained in [Evaluation profiles](evaluation-profiles.md).
 

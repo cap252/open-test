@@ -29,7 +29,7 @@ The [code map](architecture.md#from-saved-evaluations-to-tables) shows how the t
 
 | Default file | Contents |
 |---|---|
-| `results.csv` | The 15-column primary table. The duplicate `accuracy.*` files are no longer generated |
+| `results.csv` | The 15-column primary table |
 | `metrics.csv` | One row per metric, including auxiliary metrics |
 | `records.json` | Detailed measurement records, usable by `results` without the original run directory |
 | `summary.json` | Per-condition results and complete-cohort recovery means |

@@ -43,7 +43,7 @@ The statistics determine ranges, scales and zero points. The tool inserts `Quant
 
 RTN rounds each weight to the nearest integer code. AdaRound keeps the RTN encodings and learns whether each weight rounds up or down. A new percentile or scale policy is therefore a new quantization and training condition.
 
-QDQ checks verify that the intended quantization parameters and boundaries remain in the graph loaded by ONNX Runtime. This helps establish which quantization condition the measured accuracy represents; [Shared validation](#shared-validation) explains the checks.
+QDQ checks verify that the intended quantization parameters and boundaries remain in the graph loaded by ONNX Runtime. This helps establish which quantization condition the measured accuracy represents. [Shared validation](#shared-validation) explains the checks.
 
 ## 4. Postprocessing
 
@@ -71,8 +71,8 @@ The two commands answer different questions. `run` measures the accuracy of mode
 
 A model bundle groups the files and connections needed to run a model:
 
-- `network.onnx`, which performs the prediction computation;
-- optional `preprocess.onnx` and `postprocess.onnx` files for processing around the network;
+- `network.onnx`, which performs the prediction computation.
+- optional `preprocess.onnx` and `postprocess.onnx` files for processing around the network.
 - information connecting the inputs and outputs of those graphs.
 
 Not every model needs the optional graphs. Additional Python postprocessing and metric calculation belong to the evaluator. A model recipe describes the input format, preprocessing and how to interpret the outputs. Keeping this information with the network matters because changing preprocessing or output interpretation can change accuracy even when the network file stays the same. File layouts are in [Model bundles and recipes](models-and-data.md#model-bundles-and-recipes).
@@ -84,18 +84,18 @@ The comparison below identifies where the evaluated model comes from, what work 
 | Aspect | `run` | `reproduce` |
 |---|---|---|
 | Model and settings | Starts from an exported FP32 model bundle. The experiment selects quantization conditions, and the model recipe supplies input and output conventions | Loads the selected FP32 or INT8 files and the recorded recipe, preserving the network and its associated processing |
-| Quantization work | Collects calibration statistics and creates INT8 models. An AdaRound condition learns weight rounding; matching completed work can be reused | Uses the already quantized model. An AdaRound condition selects the already trained file, with no calibration or training during replay |
-| Input data | Uses calibration inputs to create INT8 models and a separate evaluation split to measure accuracy | Uses the recorded evaluation inputs and order; calibration images are not needed for replay |
+| Quantization work | Collects calibration statistics and creates INT8 models. An AdaRound condition learns weight rounding. Matching completed work can be reused | Uses the already quantized model. An AdaRound condition selects the already trained file, with no calibration or training during replay |
+| Input data | Uses calibration inputs to create INT8 models and a separate evaluation split to measure accuracy | Uses the recorded evaluation inputs and order. Calibration images are not needed for replay |
 | Evaluation and repeatability | Measures accuracy for each experiment condition | Measures accuracy and runs each evaluated input twice in the same session, recording output equality and per-sample evidence |
 
-For `reproduce`, `bindings.json` maps the recorded assets to locations on your server; it does not choose new quantization or evaluation settings. [Configuration reference](configuration.md#where-settings-live) explains where settings live. Repeating an input within one session checks local repeatability. Agreement with the original measurement or another GPU is a separate comparison described in [Reproducing results](reproducing-results.md#check-agreement-with-the-original-measurements).
+For `reproduce`, `bindings.json` maps the recorded assets to locations on your server. It does not choose new quantization or evaluation settings. [Configuration reference](configuration.md#where-settings-live) explains where settings live. Repeating an input within one session checks local repeatability. Agreement with the original measurement or another GPU is a separate comparison described in [Reproducing results](reproducing-results.md#check-agreement-with-the-original-measurements).
 
 ### Shared validation
 
 The commands share model execution, postprocessing, metric calculation and QDQ checking components. These checks give meaning to the reported accuracy:
 
 - **QDQ parameters and boundaries:** accuracy alone does not establish that the intended quantization was used. For INT8, the checks compare quantized weights, scales and zero points with the quantization record, including the graph loaded by ONNX Runtime. They also verify protected activation boundaries, such as keeping QDQ out of the intermediate computation of `x * sigmoid(x)`. Both paths use the same runtime audit function. Its scope is ONNX Runtime, as explained in [Known limitations](validation.md#known-limitations).
-- **Evaluation conditions:** shared metric code provides a common scoring implementation. Comparing repeated measurements of the same condition still requires matching model files, inputs and order, preprocessing, evaluation profile and sample scope. The saved records identify these conditions and whether evaluation was full or partial; see [How to read a result](validation.md#how-to-read-a-result).
+- **Evaluation conditions:** shared metric code provides a common scoring implementation. Comparing repeated measurements of the same condition still requires matching model files, inputs and order, preprocessing, evaluation profile and sample scope. The saved records identify these conditions and whether evaluation was full or partial. See [How to read a result](validation.md#how-to-read-a-result).
 
 <a id="code-map"></a>
 <a id="where-to-start-reading"></a>
@@ -135,7 +135,7 @@ The following sections connect the responsibilities above to concrete functions 
 
 ### reproduce call sequence
 
-`reproduction/cli.py` sends preparation to `prepare.py` and inference to `execution.py`. Preparation selects the requested models, resolves their assets through the bindings and records each verified condition. `replay_bundle()` builds the bundle from verified graph paths, the recorded recipe and output aliases. It reads no `model.json`; the selection records supply the file hashes used for verification.
+`reproduction/cli.py` sends preparation to `prepare.py` and inference to `execution.py`. Preparation selects the requested models, resolves their assets through the bindings and records each verified condition. `replay_bundle()` builds the bundle from verified graph paths, the recorded recipe and output aliases. It reads no `model.json`. The selection records supply the file hashes used for verification.
 
 Execution uses its own inference loop to run each input twice, then scores the outputs with the shared `ModelEvaluator`. Per-sample records support repeatability checks, resume and comparison. This loop handles reproduction-specific recording while reusing the same postprocessing and metric components as `run`.
 
@@ -143,7 +143,7 @@ Model selection for `reproduce prepare --model-set` and `reproduce configs --mod
 
 ### QDQ audit sessions
 
-In `run`, `runner.runtime_audit()` saves the newly quantized model and opens a separate ONNX Runtime session to inspect its serialized execution graph before evaluation. In `reproduce`, the execution graph comes from the session used for evaluation. Both call `quant.engine.audit_runtime()` to check parameters and protected activation boundaries; the session arrangement reflects where each execution path performs the shared checks.
+In `run`, `runner.runtime_audit()` saves the newly quantized model and opens a separate ONNX Runtime session to inspect its serialized execution graph before evaluation. In `reproduce`, the execution graph comes from the session used for evaluation. Both call `quant.engine.audit_runtime()` to check parameters and protected activation boundaries. The session arrangement reflects where each execution path performs the shared checks.
 
 ### Result reuse and resume
 

@@ -232,7 +232,12 @@ def measurement_reason(record):
     if record.get("reference"):
         return "not_this_execution"
     if record.get("state") not in SUCCESS:
-        return record.get("failure_reason") or "state:" + str(record.get("state"))
+        reason = record.get("failure_reason")
+        return (
+            reason
+            if isinstance(reason, str) and reason
+            else "state:" + str(record.get("state"))
+        )
     if record.get("evidence", {}).get("result_hash_verified") is not True:
         return "unverified_result"
     return None
@@ -394,6 +399,12 @@ def tables(records):
             pairing_status=pair_state,
             pairing_reason=pair_reason,
         )
+        failure = r.get("failure_reason")
+        failure_details = r.get(
+            "failure_details", failure if not isinstance(failure, str) else None
+        )
+        if failure_details is not None:
+            row["failure_details"] = failure_details
         rows.append(row)
         for key, item in measured.items():
             details.append(

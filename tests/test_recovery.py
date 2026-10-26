@@ -117,6 +117,46 @@ class RecoveryTests(unittest.TestCase):
             tables([base, quantized])[0][1]["pairing_reason"],
         )
 
+    def test_legacy_structured_failure_reason_keeps_details_separate(self):
+        from opennpu_quant.raw_report import build_report
+        from opennpu_quant.results import export_records, measurement_reason
+
+        for state in ("pending", "fail"):
+            for details in (
+                ["missing network.onnx"],
+                {"type": "MissingAsset", "path": "network.onnx"},
+            ):
+                for side in ("measurement", "baseline"):
+                    with (
+                        self.subTest(state=state, details=details, side=side),
+                        tempfile.TemporaryDirectory() as temp,
+                    ):
+                        base, quantized = record(), record("q", 0.78)
+                        failed = quantized if side == "measurement" else base
+                        failed.update(
+                            state=state, failure_reason=details, complete=False
+                        )
+                        records = [base, quantized]
+                        before = copy.deepcopy(records)
+                        self.assertEqual("state:" + state, measurement_reason(failed))
+                        export_records(records, temp, table_profile="opennpu_raw")
+                        summary = read_json(Path(temp) / "summary.json")
+                        row = summary["rows"][1]
+                        self.assertEqual(
+                            side + ":state:" + state, row["pairing_reason"]
+                        )
+                        self.assertIsNone(row["recovery_pct"])
+                        selected = summary["rows"][1 if side == "measurement" else 0]
+                        self.assertEqual(details, selected["failure_details"])
+                        raw = build_report(records)["metadata"]["records"]
+                        item = raw[1 if side == "measurement" else 0]
+                        self.assertEqual("state:" + state, item["reason"])
+                        self.assertEqual(details, item["failure_details"])
+                        self.assertEqual(
+                            before, read_json(Path(temp) / "records.json")["records"]
+                        )
+                        self.assertEqual(before, records)
+
     def test_invalid_numbers_are_rejected(self):
         for invalid in (float("nan"), float("inf"), -float("inf"), True, "0.8"):
             for numerator, denominator in (

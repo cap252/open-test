@@ -83,7 +83,7 @@ LFW requires all 6,000 pairs. A small request that includes MobileFaceNet stops 
 
 Use this workflow to create an INT8 model from an existing trained checkpoint: prepare the dataset, export FP32 ONNX, collect calibration statistics, then quantize and evaluate. `export resnet18` downloads the pinned pretrained checkpoint and writes the FP32 bundle to `workspace/models/resnet18/`. `run` evaluates FP32 and creates and evaluates the selected INT8 model.
 
-First download and extract ImageNet using the [dataset guide](docs/models-and-data.md#prepare-datasets). The `data prepare` command below checks the local files and writes a manifest; it does not download images. This example uses two calibration images and two evaluation images for a quick execution check:
+First download and extract ImageNet using the [dataset guide](docs/models-and-data.md#prepare-datasets). The `data prepare` command below checks the local files and writes a manifest. It does not download images. This example uses two calibration images and two evaluation images for a quick execution check:
 
 ```bash
 opennpu-quant data prepare imagenet --root /data/imagenet --source folder
@@ -105,7 +105,7 @@ A successful fixed-model evaluation verifies the supplied graphs and evaluation 
 
 ## Validation scope
 
-Assess execution completion, reference agreement and benchmark accuracy separately. Benchmark accuracy requires full evaluation of each selected model and condition. For LFW, use all 6,000 pairs. Rescoring saved outputs checks postprocessing and metric calculation; verifying inference on a new GPU or newly generated INT8 models requires a new evaluation. See [validation scope](docs/validation.md) for the evidence and limits.
+Assess execution completion, reference agreement and benchmark accuracy separately. Benchmark accuracy requires full evaluation of each selected model and condition. For LFW, use all 6,000 pairs. Rescoring saved outputs checks postprocessing and metric calculation. Verifying inference on a new GPU or newly generated INT8 models requires a new evaluation. See [validation scope](docs/validation.md) for the evidence and limits.
 
 ## Python API
 
@@ -121,7 +121,7 @@ result = quantize(model, stats, scheme, ort=ort)
 save_model(result.model, "model_int8.onnx")
 ```
 
-`feeds` supplies preprocessed calibration inputs as dictionaries mapping model input names to NumPy arrays. Pass the function itself; each call must return a fresh iterator with the same values and order, because calibration reads the inputs twice. See the [Python API guide](docs/api.md) for a complete example.
+`feeds` supplies preprocessed calibration inputs as dictionaries mapping model input names to NumPy arrays. Pass the function itself. Each call must return a fresh iterator with the same values and order, because calibration reads the inputs twice. See the [Python API guide](docs/api.md) for a complete example.
 
 ## Documentation
 

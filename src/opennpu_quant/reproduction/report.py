@@ -40,6 +40,7 @@ def _quantization(entry):
 def _record(row, state, prepared, saved, run, run_id):
     entry = row["entry"]
     recipe = entry["recipe"]
+    failure = state.get("error") or state.get("missing") or "not_executed"
     record = dict(
         run_id=run_id,
         model=entry["model"],
@@ -57,7 +58,9 @@ def _record(row, state, prepared, saved, run, run_id):
         complete=False,
         full_evaluation=False,
         reference=False,
-        failure_reason=state.get("error") or state.get("missing") or "not_executed",
+        failure_reason=failure
+        if isinstance(failure, str)
+        else "state:" + str(state.get("state", "pending")),
         evidence=dict(
             result_hash_verified=False,
             source_result=entry["source_result"],
@@ -65,6 +68,11 @@ def _record(row, state, prepared, saved, run, run_id):
         ),
     )
     if state.get("state") != "completed":
+        details = state.get("missing") or (
+            failure if not isinstance(failure, str) else None
+        )
+        if details is not None:
+            record["failure_details"] = details
         return record
     if not state.get("result"):
         raise ValueError("Completed condition has no result: " + entry["id"])

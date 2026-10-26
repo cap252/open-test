@@ -43,7 +43,7 @@ result = quantize(
 save_model(result.model, "workspace/api-demo.onnx")
 ```
 
-`calibrate` returns activation statistics in `stats`. `Scheme` selects the quantization settings, and `quantize` uses the model and statistics to create the QDQ model in `result.model`. `save_model` writes it to `workspace/api-demo.onnx` and creates the parent directory if needed. This example creates a model; measuring its accuracy is a separate evaluation step.
+`calibrate` returns activation statistics in `stats`. `Scheme` selects the quantization settings, and `quantize` uses the model and statistics to create the QDQ model in `result.model`. `save_model` writes it to `workspace/api-demo.onnx` and creates the parent directory if needed. This example creates a model. Measuring its accuracy is a separate evaluation step.
 
 ## Prepare calibration inputs
 
@@ -73,7 +73,7 @@ Use this section when you want to modify predictions before they are scored. For
 
 ### Prepare the model and dataset
 
-The following example uses YOLOv5s and COCO. Prepare COCO using [Download and prepare COCO 2017 or VOC2012](models-and-data.md#download-and-prepare-coco-2017-or-voc2012), then run these commands from the repository root. Replace `/data/coco` with your dataset location. `data prepare` checks those local files; `export` downloads the pinned model checkpoint and creates the ONNX files.
+The following example uses YOLOv5s and COCO. Prepare COCO using [Download and prepare COCO 2017 or VOC2012](models-and-data.md#download-and-prepare-coco-2017-or-voc2012), then run these commands from the repository root. Replace `/data/coco` with your dataset location. `data prepare` checks those local files. `export` downloads the pinned model checkpoint and creates the ONNX files.
 
 ```bash
 opennpu-quant data prepare coco --root /data/coco --home workspace
@@ -86,7 +86,7 @@ These steps create the dataset manifest at `workspace/data/coco/manifest.json` a
 
 `ModelSpec` loads the model settings, `ModelBundle` opens its ONNX files, and `Dataset` reads the prepared data manifest. Together they provide the `bundle` and `dataset` used below.
 
-`resolve` selects the model's existing evaluation behavior; its `.postprocess` attribute gives us the default Python postprocessing function. `ModelEvaluator` connects the replacement function to the model's existing metric. Import these helpers from the module paths shown in the example.
+`resolve` selects the model's existing evaluation behavior. Its `.postprocess` attribute gives us the default Python postprocessing function. `ModelEvaluator` connects the replacement function to the model's existing metric. Import these helpers from the module paths shown in the example.
 
 This example keeps detections with a score of at least `0.25`. Adjust that filtering step to try your own postprocessing.
 
@@ -125,7 +125,7 @@ print(result.metrics)
 print(result.samples, result.complete)
 ```
 
-The example prints the accuracy metrics and `3 False`: three images were evaluated, so this is not a complete COCO evaluation. To evaluate all validation images, remove `limit=3` from both `dataset.samples` and `evaluate`, keeping `expected_samples` unchanged. Filtering detections can change accuracy; use a full evaluation to measure that effect.
+The example prints the accuracy metrics and `3 False`: three images were evaluated, so this is not a complete COCO evaluation. To evaluate all validation images, remove `limit=3` from both `dataset.samples` and `evaluate`, keeping `expected_samples` unchanged. Filtering detections can change accuracy. Use a full evaluation to measure that effect.
 
 ### Inputs and results of your postprocessing function
 
@@ -138,8 +138,8 @@ Your `postprocess` function runs after the model's CPU postprocessing graph, whe
 | `metadata` | Per-image information from preprocessing, including the information needed to restore coordinates to the original image |
 | `categories` | The mapping from model classes to COCO category IDs for COCO detection tasks |
 
-Keep these arguments unchanged and return the modified predictions. Calling the default function first, as above, gives you predictions in the format the evaluator expects. When writing a different decoder, preserve the task's output format: detection, keypoint or mask rows; face rows of `[x, y, width, height, score]`; or a semantic label array. The ground truth, metric and scoring settings continue to come from the model's [evaluation profile](evaluation-profiles.md).
+Keep these arguments unchanged and return the modified predictions. Calling the default function first, as above, gives you predictions in the format the evaluator expects. When writing a different decoder, preserve the task's output format: rows for detections, keypoints or masks, face rows of `[x, y, width, height, score]`, or a semantic label array. The ground truth, metric and scoring settings continue to come from the model's [evaluation profile](evaluation-profiles.md).
 
 Classification ranking and LFW pair verification use dedicated evaluators, so they do not support this postprocessing replacement. To change their behavior, provide your own evaluator to `evaluate(..., evaluator=...)`. An evaluator starts a measurement with `reset`, processes each output and sample with `update`, and returns the metrics with `finalize`.
 
-Each evaluation with custom postprocessing is treated as a new experiment. The tool cannot automatically verify that user-written code is unchanged, so it does not reuse these results or treat them as reproduction of the original measurements. The result records `reusable: false` and `original_reproduction_eligible: false`. Pass the function from Python; CLI and YAML configuration do not load custom postprocessing functions.
+Each evaluation with custom postprocessing is treated as a new experiment. The tool cannot automatically verify that user-written code is unchanged, so it does not reuse these results or treat them as reproduction of the original measurements. The result records `reusable: false` and `original_reproduction_eligible: false`. Pass the function from Python. CLI and YAML configuration do not load custom postprocessing functions.

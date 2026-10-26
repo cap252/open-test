@@ -6,7 +6,7 @@ A new experiment needs a prepared dataset and an FP32 ONNX model bundle. This gu
 
 `data prepare` prepares data for execution: it checks the dataset layout, image counts, ground truth and the separation of calibration and evaluation images, then writes `<data>/<dataset>/manifest.json`. With `--download`, it also downloads the inputs for COCO 2017, COCO keypoints, VOC2012, ImageNet HF or LFW. Without this option it uses local files. LFW preparation also writes aligned face crops.
 
-For `run`, follow the order **download and extract → prepare the manifest → run the evaluation**. `--download` combines the first two steps for supported datasets. For fixed-model `reproduce`, use the original manifests and path bindings described in [Bind the assets](reproducing-results.md#bind-the-assets); newly prepared manifests do not replace those fixed inputs.
+For `run`, follow the order **download and extract → prepare the manifest → run the evaluation**. `--download` combines the first two steps for supported datasets. For fixed-model `reproduce`, use the original manifests and path bindings described in [Bind the assets](reproducing-results.md#bind-the-assets). Newly prepared manifests do not replace those fixed inputs.
 
 ### Download and prepare COCO 2017 or VOC2012
 
@@ -19,9 +19,9 @@ opennpu-quant data prepare voc --root /data/voc --download
 
 COCO uses its official S3 bucket. VOC2012 uses the [archive mirror](https://data.brainchip.com/dataset-mirror/voc/VOCtrainval_11-May-2012.tar) listed by TensorFlow Datasets, with a fixed checksum. For VOC, `--root` is the final dataset directory: the command places `JPEGImages/`, `SegmentationClass/` and `ImageSets/` directly under `/data/voc`. No manual extraction or directory renaming is needed.
 
-A fresh COCO download includes the full training and validation archives plus annotations, about 20.4 GB in total; VOC2012 is about 2 GB. Allow additional disk space for the extracted files and temporary extraction. Calibration still uses the packaged list of 128 images, and preparation indexes the full evaluation set.
+A fresh COCO download includes the full training and validation archives plus annotations, about 20.4 GB in total. VOC2012 is about 2 GB. Allow additional disk space for the extracted files and temporary extraction. Calibration still uses the packaged list of 128 images, and preparation indexes the full evaluation set.
 
-Existing required files are reused. Archives are cached under `<root>/.downloads` and checked before extraction; rerunning the command can restore missing files from the cache. If an archive conflicts with an existing file, preparation stops without replacing that file. An interrupted archive download restarts on the next attempt.
+Existing required files are reused. Archives are cached under `<root>/.downloads` and checked before extraction. Rerunning the command can restore missing files from the cache. If an archive conflicts with an existing file, preparation stops without replacing that file. An interrupted archive download restarts on the next attempt.
 
 For PoseNet, use `opennpu-quant data prepare coco_keypoints --root /data/coco --download`. It reuses the COCO images and prepares the keypoint annotations with PoseNet's calibration list.
 
@@ -37,13 +37,13 @@ WIDER FACE requires a separate download. The following sources also support manu
 
 Extract the COCO archives under one root so that it contains `train2017/`, `val2017/` and `annotations/instances_val2017.json` directly. Use the instance annotations for the detection and instance-segmentation models in `cnn30`.
 
-For WIDER FACE, keep `WIDER_train/images/` and `WIDER_val/images/` under the dataset root. Place the evaluation tools at `<root>/eval_tools/`; its `ground_truth/` directory must contain `wider_face_val.mat`, `wider_easy_val.mat`, `wider_medium_val.mat` and `wider_hard_val.mat`. The text annotations in `wider_face_split.zip` do not replace these `.mat` files.
+For WIDER FACE, keep `WIDER_train/images/` and `WIDER_val/images/` under the dataset root. Place the evaluation tools at `<root>/eval_tools/`. Its `ground_truth/` directory must contain `wider_face_val.mat`, `wider_easy_val.mat`, `wider_medium_val.mat` and `wider_hard_val.mat`. The text annotations in `wider_face_split.zip` do not replace these `.mat` files.
 
 Extract VOC2012 so that `VOCdevkit/VOC2012/` contains `JPEGImages/`, `SegmentationClass/` and `ImageSets/Segmentation/val.txt`. Pass the `VOC2012` directory itself as `--root`.
 
 ### Prepare local datasets
 
-After downloading and extracting the files, run only the commands for the datasets you need and replace the paths with your own. These commands check existing files and write manifests; they do not download datasets.
+After downloading and extracting the files, run only the commands for the datasets you need and replace the paths with your own. These commands check existing files and write manifests. They do not download datasets.
 
 ```bash
 opennpu-quant data prepare imagenet --root /data/imagenet --source folder
@@ -101,7 +101,7 @@ Use the full manifest with `run --limit 6000` or `evaluation.limit: null`, or us
 
 The complete pair order, ten folds and both image views are preserved. Calibration still uses the separate 128-image split. For small checks, select `--models resnet18,yolov5s`.
 
-LFW smoke manifests and partial results are not accepted for execution, reporting or comparison in this version. Keep existing artifacts unchanged and prepare a new full evaluation using the commands above. The removed `--functional-check` and `data prepare --smoke` options are not supported.
+LFW smoke manifests and partial results are not accepted for execution, reporting or comparison in this version. Keep existing artifacts unchanged and prepare a new full evaluation using the commands above. `--functional-check` and `data prepare --smoke` are not supported.
 
 ## Export FP32 ONNX
 

@@ -513,6 +513,142 @@ print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'
                     ]
                 )
 
+    def test_completed_and_missing_models_report_without_inference(self):
+        from opennpu_quant.reproduction.assets import unseal
+        from opennpu_quant.reproduction.execution import run as execute
+        from opennpu_quant.reproduction.prepare import prepare
+        from tests.test_gpu_reproduction import fixture
+
+        for missing_condition, filename in (
+            ("fp32", "model.onnx"),
+            ("asym_pc_pot_rtn", "qdq.onnx"),
+        ):
+            with (
+                self.subTest(missing=missing_condition),
+                tempfile.TemporaryDirectory() as temp,
+            ):
+                root = Path(temp)
+                assets = fixture(root, int8=True)
+                (assets / filename).unlink()
+                package, run = root / "prepared", root / "run"
+                prepared = prepare(
+                    bindings=root / "bindings.json",
+                    selection=root / "selection.json",
+                    output=package,
+                    limit="full",
+                )
+                self.assertEqual({"ready": 1, "pending": 1}, prepared["counts"])
+                executed = execute(
+                    package=package,
+                    bindings=root / "bindings.json",
+                    output=run,
+                    device="cpu",
+                )
+                self.assertEqual(1, executed["completed"])
+                self.assertEqual(1, executed["pending"])
+                self.assertEqual(0, executed["failed"])
+                states = unseal(run / "run.json")["conditions"]
+                pending = next(r for r in states if r["state"] == "pending")
+                completed = next(r for r in states if r["state"] == "completed")
+                missing = pending["missing"]
+                self.assertIsInstance(missing, list)
+                self.assertTrue(any(filename in detail for detail in missing))
+                measured = unseal(run / completed["result"]["path"])
+                accuracy = measured["metrics"]["top1"] * 100
+                originals = {
+                    p: p.read_bytes()
+                    for directory in (run, package)
+                    for p in directory.rglob("*.json")
+                }
+                for profile in (None, "opennpu_raw"):
+                    output = root / str(profile)
+                    command = [
+                        "reproduce",
+                        "report",
+                        "--run",
+                        str(run),
+                        "--package",
+                        str(package),
+                        "--output",
+                        str(output),
+                        "--format",
+                        "csv,tsv,json,md",
+                    ]
+                    if profile:
+                        command += ["--table-profile", profile]
+                    self.metadata_cli(command)
+                    records = read_json(output / "records.json")["records"]
+                    self.assertEqual(2, len(records))
+                    missing_record = next(r for r in records if r["state"] == "pending")
+                    self.assertEqual("state:pending", missing_record["failure_reason"])
+                    self.assertEqual(missing, missing_record["failure_details"])
+                    summary = read_json(output / "summary.json")
+                    by_condition = {r["condition"]: r for r in summary["rows"]}
+                    missing_row = by_condition[missing_condition]
+                    self.assertEqual(
+                        "measurement:state:pending", missing_row["pairing_reason"]
+                    )
+                    self.assertEqual(missing, missing_row["failure_details"])
+                    self.assertIsNone(missing_row["value_pct"])
+                    self.assertFalse(missing_row["complete"])
+                    valid = by_condition[completed["condition"]]
+                    self.assertTrue(valid["complete"])
+                    self.assertEqual(accuracy, valid["value_pct"])
+                    if missing_condition == "fp32":
+                        self.assertEqual(
+                            "baseline:state:pending", valid["pairing_reason"]
+                        )
+                        self.assertIsNone(valid["recovery_pct"])
+                    for suffix, delimiter in (("csv", ","), ("tsv", "\t")):
+                        report_filename = (
+                            ("raw_data" if profile else "results") + "." + suffix
+                        )
+                        with (output / report_filename).open(
+                            encoding="utf-8-sig", newline=""
+                        ) as stream:
+                            rows = list(csv.DictReader(stream, delimiter=delimiter))
+                        self.assertEqual(1 if profile else 2, len(rows))
+                        cell = (
+                            "int8_accuracy"
+                            if missing_condition == "fp32"
+                            else "fp32_accuracy"
+                        )
+                        self.assertTrue(
+                            any(
+                                r[cell] != "" and float(r[cell]) == accuracy
+                                for r in rows
+                            )
+                        )
+                    if profile:
+                        metadata = read_json(output / "raw_data.metadata.json")
+                        self.assertEqual(
+                            {"full": 1, "partial": 0, "excluded": 1}, metadata["counts"]
+                        )
+                        excluded = next(
+                            r
+                            for r in metadata["records"]
+                            if r["condition"] == missing_condition
+                        )
+                        self.assertEqual("state:pending", excluded["reason"])
+                        self.assertEqual(missing, excluded["failure_details"])
+                    portable = root / (str(profile) + "-portable")
+                    args = [
+                        "results",
+                        str(output / "records.json"),
+                        "--output",
+                        str(portable),
+                        "--format",
+                        "csv,tsv,json,md",
+                    ]
+                    if profile:
+                        args += ["--table-profile", profile]
+                    self.metadata_cli(args)
+                    self.assertEqual(
+                        (output / "summary.json").read_bytes(),
+                        (portable / "summary.json").read_bytes(),
+                    )
+                self.assertEqual(originals, {p: p.read_bytes() for p in originals})
+
     def test_replay_relocation_missing_and_failed_conditions(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

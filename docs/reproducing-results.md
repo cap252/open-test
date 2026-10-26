@@ -190,7 +190,7 @@ A `completed` state or the right number of CSV rows does not establish agreement
 
 Repeat only `reproduce run` with the same package, bindings, device, storage mode and package version. There is no need to run `prepare` again. Completed conditions are reused after their files and identity are verified.
 
-Within an interrupted condition, completed samples are fed to the evaluator again. With `--storage predictions`, those samples are also inferred again to verify their raw hashes, because the tensors were not kept. A changed output hash fails this resume check, even for a 1 ULP difference; it checks continuity with the saved execution.
+Within an interrupted condition, completed samples are fed to the evaluator again. With `--storage predictions`, those samples are also inferred again to verify their raw hashes, because the tensors were not kept. A changed output hash fails this resume check, even for a 1 ULP difference. This checks continuity with the saved execution.
 
 Which directories must be new depends on what changed:
 
@@ -224,8 +224,8 @@ Hashes establish that the recorded model files, inputs and saved artifacts are u
 
 | Comparison | Verdict |
 |---|---|
-| Recorded model and input identity | Exact hash match; changed files or input tensors do not represent the same measurement conditions |
-| The same input run twice in the same ONNX Runtime session | Bitwise equality; a 1 ULP output difference fails the repeatability check |
+| Recorded model and input identity | Exact hash match. Changed files or input tensors do not represent the same measurement conditions |
+| The same input run twice in the same ONNX Runtime session | Bitwise equality. A 1 ULP output difference fails the repeatability check |
 | Raw outputs across GPUs, with both tensors retained | Matching shape, dtype and finite values, and elementwise tolerance `1e-5 + 1e-4 × abs(reference)` |
 | Raw-output comparison with only hashes available | Equal hashes establish byte equality. Different hashes leave the raw verdict `pending` because tensors are needed to assess tolerance |
 | Final predictions | Matching detection counts, classes, order, labels and masks, with numerical tolerance for coordinates and scores |

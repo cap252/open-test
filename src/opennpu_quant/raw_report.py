@@ -80,6 +80,8 @@ def build_report(records, *, profile="opennpu_raw"):
             exported_to=None,
             reason=None,
         )
+        if "failure_details" in row:
+            item["failure_details"] = row["failure_details"]
         if record.get("origin") not in {"standalone_run", "fixed_replay"}:
             item["reason"] = "not_this_execution"
         elif row["measurement_reason"]:

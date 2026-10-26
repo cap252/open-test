@@ -53,6 +53,6 @@ evaluation:
     yolov5s_seg: yolov5_seg_scaled_coeff_mask_area_v1
 ```
 
-YOLOv7-face clips only the first four face boxes with its default profile. `yolov7_face_clip_all_v1` applies clipping to every face box. `yolov5_seg_scaled_coeff_mask_area_v1` keeps the objectness-scaled mask coefficients in YOLOv5s-seg and changes only the COCO area policy. These alternatives apply to their respective models. Set a supported profile for each model; the tool validates the model/profile combination before execution. `reproduce run` has no profile override.
+YOLOv7-face clips only the first four face boxes with its default profile. `yolov7_face_clip_all_v1` applies clipping to every face box. `yolov5_seg_scaled_coeff_mask_area_v1` keeps the objectness-scaled mask coefficients in YOLOv5s-seg and changes only the COCO area policy. These alternatives apply to their respective models. Set a supported profile for each model. The tool validates the model/profile combination before execution. `reproduce run` has no profile override.
 
 Profiles are part of the stored results and their identities. A profile change does not affect calibration inputs or statistics, so statistics caches remain valid. See [Reuse and caching](run-pipeline.md#reuse-and-caching) for what triggers recomputation.

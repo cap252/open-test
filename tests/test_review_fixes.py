@@ -53,6 +53,7 @@ class ReportPolicyTests(unittest.TestCase):
                 samples=100,
                 expected_samples=100,
                 complete=True,
+                full_evaluation=True,
                 model_identity="source",
                 preprocessing_identity="pre",
                 evaluation_identity="same",

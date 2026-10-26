@@ -150,6 +150,59 @@ class ResultReliabilityTests(unittest.TestCase):
             self.assertTrue((output / "results.csv").is_file())
             self.assertFalse((output / "accuracy.csv").exists())
 
+    def test_corrupt_completion_evidence_refreshes_existing_reports(self):
+        from opennpu_quant.report import report
+        import csv
+
+        with tempfile.TemporaryDirectory() as temp:
+            paths, config = fixture(Path(temp))
+            config["conditions"] = {"fp32": {}}
+            run(config, paths, formats="csv,tsv,json,md")
+            output = paths.runs / config["name"]
+            report(output, formats="csv,tsv,json,md", table_profile="opennpu_raw")
+            proof = output / "toy/fp32/complete.json"
+            original = proof.read_bytes()
+            for corrupt in (b"{broken", b"[]", b'{"files": []}'):
+                with self.subTest(proof=corrupt):
+                    proof.write_bytes(corrupt)
+                    with self.assertRaises((ValueError, TypeError, KeyError)):
+                        run(config, paths, formats="csv")
+                    self.assertEqual(
+                        "failed", read_json(output / "status.json")["state"]
+                    )
+                    summary = read_json(output / "summary.json")
+                    self.assertEqual("failed", summary["rows"][0]["state"])
+                    self.assertFalse(summary["rows"][0]["complete"])
+                    self.assertIsNone(summary["rows"][0]["recovery_pct"])
+                    self.assertIsNone(summary["mean_recovery"]["fp32"])
+                    for ext, delimiter in (("csv", ","), ("tsv", "\t")):
+                        with (output / ("results." + ext)).open(
+                            encoding="utf-8-sig", newline=""
+                        ) as stream:
+                            rows = list(csv.DictReader(stream, delimiter=delimiter))
+                        self.assertEqual(1, len(rows))
+                        self.assertEqual("", rows[0]["fp32_accuracy"])
+                        for name in ("raw_data", "raw_data.partial"):
+                            with (output / (name + "." + ext)).open(
+                                encoding="utf-8-sig", newline=""
+                            ) as stream:
+                                self.assertEqual(
+                                    [],
+                                    list(csv.DictReader(stream, delimiter=delimiter)),
+                                )
+                    self.assertNotIn("100.0000", (output / "summary.md").read_text())
+                    self.assertEqual(corrupt, proof.read_bytes())
+            proof.write_bytes(original)
+            run(config, paths)
+            self.assertEqual(
+                "reused",
+                read_json(output / "status.json")["models"]["toy"]["conditions"][
+                    "fp32"
+                ]["state"],
+            )
+            proof.write_bytes(b"{broken")
+            self.assertEqual("unverified", report(output)["rows"][0]["state"])
+
     def test_f01_failed_force_does_not_complete_old_quantized_result(self):
         with tempfile.TemporaryDirectory() as temp:
             paths, config = fixture(Path(temp))

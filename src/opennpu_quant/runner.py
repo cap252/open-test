@@ -149,9 +149,29 @@ def run(
                     if condition["state"] == "running":
                         condition.update(state=status["state"], error=status["error"])
             atomic_json(out / "status.json", status)
-            # Best effort: a report failure must not hide the original error.
-            with contextlib.suppress(Exception):
-                report(out, formats=formats, table_profile=table_profile)
+            # Refresh existing reports too, even when this attempt selects fewer formats.
+            existing = {
+                p.suffix[1:]
+                for stem in (
+                    "results",
+                    "metrics",
+                    "summary",
+                    "records",
+                    "raw_data",
+                    "raw_data.partial",
+                )
+                for p in out.glob(stem + ".*")
+                if p.suffix[1:] in {"csv", "tsv", "json", "md"}
+            }
+            profiles = {table_profile}
+            if any((out / ("results." + ext)).exists() for ext in ("csv", "tsv")):
+                profiles.add(None)
+            if (out / "raw_data.metadata.json").exists():
+                profiles.add("opennpu_raw")
+            # A report failure must not hide the original execution error.
+            for profile in sorted(profiles, key=lambda p: p or ""):
+                with contextlib.suppress(Exception):
+                    report(out, formats=formats | existing, table_profile=profile)
             raise
         status.update(state="completed", finished=now())
         atomic_json(out / "status.json", status)

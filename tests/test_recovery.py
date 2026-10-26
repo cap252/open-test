@@ -8,6 +8,7 @@ import struct
 import tempfile
 import unittest
 
+from opennpu_quant._io import read_json
 from opennpu_quant.reproduction.assets import file_record, seal, unseal
 from opennpu_quant.reproduction.execution import reevaluation_metrics
 from opennpu_quant.reproduction.report import report
@@ -109,6 +110,121 @@ class RecoveryTests(unittest.TestCase):
         self.assertIsNone(rows[0]["recovery_pct"])
         rows, _ = tables([record(evidence={})])
         self.assertIsNone(rows[0]["recovery_pct"])
+
+    def test_all_report_outputs_share_baseline_eligibility(self):
+        from opennpu_quant.results import export_records
+
+        cases = (
+            "valid",
+            "partial",
+            "profile",
+            "scope",
+            "sample_unit",
+            "view_count",
+            "expected_samples",
+            "proof",
+            "reference",
+            "origin",
+            "quantized_proof",
+            "missing",
+            "zero",
+            "legacy_scope",
+        )
+        with tempfile.TemporaryDirectory() as temp:
+            for case in cases:
+                base = record(
+                    full_evaluation=True,
+                    evaluation_profile="original",
+                    sample_unit="images",
+                )
+                quantized = record(
+                    "q",
+                    0.78,
+                    full_evaluation=True,
+                    evaluation_profile="original",
+                    sample_unit="images",
+                )
+                records = [base, quantized]
+                if case == "partial":
+                    for r in records:
+                        r.update(samples=3, full_evaluation=False, complete=False)
+                elif case == "legacy_scope":
+                    for r in records:
+                        r.pop("full_evaluation")
+                elif case in {
+                    "profile",
+                    "sample_unit",
+                    "view_count",
+                    "expected_samples",
+                }:
+                    base[{"profile": "evaluation_profile"}.get(case, case)] = (
+                        "different"
+                    )
+                elif case == "scope":
+                    base["full_evaluation"] = False
+                elif case in {"proof", "quantized_proof"}:
+                    (quantized if case == "quantized_proof" else base)["evidence"][
+                        "result_hash_verified"
+                    ] = False
+                elif case == "reference":
+                    base["reference"] = True
+                elif case == "origin":
+                    base["origin"] = "fixed_replay"
+                elif case == "missing":
+                    records = [quantized]
+                elif case == "zero":
+                    base["metrics"]["top1"]["value"] = 0.0
+                expected = (
+                    97.5 if case in {"valid", "partial", "legacy_scope"} else None
+                )
+                summaries = []
+                for profile in (None, "opennpu_raw"):
+                    with self.subTest(case=case, profile=profile):
+                        output = Path(temp) / case / str(profile)
+                        export_records(
+                            records,
+                            output,
+                            formats="csv,tsv,json,md",
+                            table_profile=profile,
+                        )
+                        summary = read_json(output / "summary.json")
+                        summaries.append(summary)
+                        row = summary["rows"][-1]
+                        self.assertEqual(expected, row["recovery_pct"])
+                        self.assertEqual(
+                            97.5 if case == "valid" else None,
+                            summary["mean_recovery"]["q"],
+                        )
+                        for ext, delimiter in (("csv", ","), ("tsv", "\t")):
+                            tables = (
+                                [output / ("results." + ext)]
+                                if profile is None
+                                else [
+                                    output / (name + "." + ext)
+                                    for name in ("raw_data", "raw_data.partial")
+                                ]
+                            )
+                            rows = []
+                            for table in tables:
+                                with table.open(
+                                    encoding="utf-8-sig", newline=""
+                                ) as stream:
+                                    rows.extend(
+                                        csv.DictReader(stream, delimiter=delimiter)
+                                    )
+                            qrows = [r for r in rows if r["scheme"] != "FP32"]
+                            if case == "quantized_proof" and profile:
+                                self.assertEqual([], qrows)
+                            else:
+                                self.assertEqual(1, len(qrows))
+                                self.assertEqual(
+                                    "" if expected is None else str(expected),
+                                    qrows[0]["recovery_percent"],
+                                )
+                        markdown = (output / "summary.md").read_text()
+                        if expected is None:
+                            self.assertNotIn("97.5000", markdown)
+                self.assertEqual(summaries[0], summaries[1])
 
     def test_replay_summary_and_csv_tsv_agree_bitwise(self):
         base, value = 0.3750636660794323, 0.3546653217459048

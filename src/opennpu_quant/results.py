@@ -227,6 +227,45 @@ def raw_export_row(row):
     return {field: values.get(field) for field in RAW_FIELDS}
 
 
+def measurement_reason(record):
+    """Why a saved record cannot supply a measured value in any report."""
+    if record.get("reference"):
+        return "not_this_execution"
+    if record.get("state") not in SUCCESS:
+        return record.get("failure_reason") or "state:" + str(record.get("state"))
+    if record.get("evidence", {}).get("result_hash_verified") is not True:
+        return "unverified_result"
+    return None
+
+
+def full_evaluation(record):
+    """Full dataset coverage, shared by table grouping and cohort averages."""
+    return bool(
+        record.get("full_evaluation") is True
+        and record.get("complete") is True
+        and type(record.get("samples")) is int
+        and type(record.get("expected_samples")) is int
+        and record["samples"] > 0
+        and record["samples"] == record["expected_samples"]
+    )
+
+
+def _baseline_scope(record):
+    return (
+        full_evaluation(record),
+        *(
+            record.get(key)
+            for key in (
+                "expected_samples",
+                "sample_unit",
+                "view_count",
+                "evaluation_profile",
+                "origin",
+            )
+        ),
+    )
+
+
 def tables(records):
     lookup = {}
     for r in records:
@@ -244,7 +283,8 @@ def tables(records):
         metric_values({k: m["value"] for k, m in r.get("metrics", {}).items()})
     rows, details = [], []
     for r in records:
-        ok = r["state"] in SUCCESS
+        reason = measurement_reason(r)
+        ok = reason is None
         metric = r["primary_metric"]
         measured = r.get("metrics", {}) if ok else {}
         value = percent(measured.get(metric))
@@ -266,9 +306,17 @@ def tables(records):
         pair_state, pair_reason = compare_identity_evidence(
             pairing_identity(r), pairing_identity(b or {})
         )
+        base_ok = b is not None and measurement_reason(b) is None
         if b and b.get("quantization") is not None:
             pair_state, pair_reason = "mismatch", "mismatch:baseline_is_not_FP32"
-        matched = bool(ok and b and b["state"] in SUCCESS and pair_state == "passed")
+        elif not ok or (b is not None and not base_ok):
+            pair_state, pair_reason = "insufficient_evidence", "unverified_measurement"
+        elif b is not None and _baseline_scope(r) != _baseline_scope(b):
+            pair_state, pair_reason = (
+                "mismatch",
+                "incompatible_baseline_scope_or_profile",
+            )
+        matched = bool(ok and base_ok and pair_state == "passed")
         if not matched and pair_state == "passed":
             pair_state, pair_reason = (
                 "insufficient_evidence",
@@ -278,13 +326,16 @@ def tables(records):
             not ok
             and b
             and b.get("quantization") is None
-            and b["state"] in SUCCESS
+            and base_ok
             and b["primary_metric"] == metric
             and b.get("dataset") == r.get("dataset")
             and b.get("split") == r.get("split")
         )
         base_metrics = b.get("metrics", {}) if matched or pending_base else {}
         fp = percent(base_metrics.get(metric))
+        if matched and fp == 0:
+            matched = False
+            pair_state, pair_reason = "unmatched", "zero_fp32_denominator"
         q = r.get("quantization") or {}
         source = r.get("model_source") or {}
         row = dict(
@@ -302,13 +353,15 @@ def tables(records):
             samples=r.get("samples"),
             expected_samples=r.get("expected_samples"),
             complete=bool(ok and r.get("complete")),
+            full_evaluation=bool(ok and full_evaluation(r)),
+            measurement_reason=reason,
             reference=bool(r.get("reference", False)),
             percentile=q.get("calibration", {}).get("percentile"),
             activation_scale=q.get("activation_scale"),
             weight_scale=q.get("weight_scale"),
             run_id=r["run_id"],
             model_name=r.get("model_name", r["model"]),
-            state=r["state"],
+            state=r["state"] if ok or r["state"] not in SUCCESS else "unverified",
             origin=r["origin"],
             dataset=r.get("dataset"),
             task=r.get("task") or r.get("model_metadata", {}).get("task"),
@@ -507,10 +560,10 @@ def _cohort_means(rows, config):
     for condition in config["conditions"]:
         selected = [r for r in rows if r["condition"] == condition]
         complete = len(selected) == len(config["models"]) and all(
-            r["complete"]
+            r["full_evaluation"]
             and r["samples"] == r["expected_samples"]
             and r["recovery_pct"] is not None
-            and baselines.get(r["model"], {}).get("complete", False)
+            and baselines.get(r["model"], {}).get("full_evaluation", False)
             and baselines[r["model"]]["samples"]
             == baselines[r["model"]]["expected_samples"]
             == r["expected_samples"]

@@ -5,7 +5,6 @@ from pathlib import Path
 from ._io import atomic_json
 from .results import (
     RAW_FIELDS,
-    SUCCESS,
     normalize_formats,
     raw_export_row,
     table_text,
@@ -38,19 +37,8 @@ def validate_profile(profile):
 def build_report(records, *, profile="opennpu_raw"):
     validate_profile(profile)
     rows, _ = tables(records)
-    lookup = {(r["run_id"], r["model"], r["condition"]): r for r in records}
     groups = {"full": [], "partial": []}
     metadata = []
-
-    def full(record):
-        return bool(
-            record.get("full_evaluation") is True
-            and record.get("complete") is True
-            and type(record.get("samples")) is int
-            and type(record.get("expected_samples")) is int
-            and record["samples"] > 0
-            and record["samples"] == record.get("expected_samples")
-        )
 
     for record, row in zip(records, rows):
         proof = record.get("evidence", {})
@@ -92,36 +80,17 @@ def build_report(records, *, profile="opennpu_raw"):
             exported_to=None,
             reason=None,
         )
-        if record.get("origin") not in {"standalone_run", "fixed_replay"} or record.get(
-            "reference"
-        ):
+        if record.get("origin") not in {"standalone_run", "fixed_replay"}:
             item["reason"] = "not_this_execution"
-        elif record["state"] not in SUCCESS:
-            item["reason"] = record.get("failure_reason") or "state:" + record["state"]
-        elif proof.get("result_hash_verified") is not True:
-            item["reason"] = "unverified_result"
+        elif row["measurement_reason"]:
+            item["reason"] = row["measurement_reason"]
         elif row["value_pct"] is None:
             item["reason"] = "missing_or_incompatible_metric"
         if item["reason"]:
             metadata.append(item)
             continue
-        group = "full" if full(record) else "partial"
-        base = lookup.get((record["run_id"], record["model"], "fp32"))
+        group = "full" if row["full_evaluation"] else "partial"
         reason = row["pairing_reason"]
-        if base and (
-            full(base) != full(record)
-            or base.get("expected_samples") != record.get("expected_samples")
-            or base.get("sample_unit") != record.get("sample_unit")
-            or base.get("view_count") != record.get("view_count")
-            or base.get("evaluation_profile") != record.get("evaluation_profile")
-            or base.get("evidence", {}).get("result_hash_verified") is not True
-            or base.get("reference")
-            or base.get("origin") != record.get("origin")
-        ):
-            row = dict(row, fp32_pct=None, recovery_pct=None)
-            reason = "incompatible_baseline_scope_or_profile"
-        elif row["fp32_pct"] == 0:
-            reason = "zero_fp32_denominator"
         raw = raw_export_row(row)
         raw.update(
             model=MODEL_NAMES.get(record["model"], raw["model"]),

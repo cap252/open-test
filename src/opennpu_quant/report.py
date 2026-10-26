@@ -23,11 +23,13 @@ ATTESTED_FILES = ("quantization.json", "predictions.jsonl.gz")
 def verify_artifacts(directory, proof):
     """True when result.json, model.onnx and the extra files match complete.json."""
     directory = Path(directory)
+    if not isinstance(proof, dict):
+        return False
     result = directory / "result.json"
     if not result.is_file() or sha256(result) != proof.get("result_sha256"):
         return False
     files = proof.get("files", {})
-    if set(files) - set(ATTESTED_FILES):
+    if not isinstance(files, dict) or set(files) - set(ATTESTED_FILES):
         return False
     for name, digest in files.items():
         if not (directory / name).is_file() or sha256(directory / name) != digest:
@@ -87,10 +89,16 @@ def _verified(path, config, status):
     proof_path = path.parent / "complete.json"
     if not path.is_file() or not proof_path.is_file():
         return False
-    proof = read_json(proof_path)
-    if not verify_artifacts(path.parent, proof):
+    try:
+        proof = read_json(proof_path)
+        if not verify_artifacts(path.parent, proof):
+            return False
+        measured = read_json(path)
+    except (ValueError, FileNotFoundError, IsADirectoryError):
+        # Corrupt evidence must not prevent stale successful reports being replaced.
         return False
-    measured = read_json(path)
+    if not isinstance(measured, dict):
+        return False
     if measured.get("config_identity") != object_hash(config):
         return False
     if status.get("attempt_id"):

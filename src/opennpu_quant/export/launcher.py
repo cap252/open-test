@@ -38,12 +38,13 @@ def export(
         [
             python,
             "-I",
+            "-B",
             "-c",
             _WORKER_BOOTSTRAP,
             str(Path(__file__).resolve().parents[1]),
         ]
         if python
-        else [sys.executable, "-m", "opennpu_quant.export.worker"]
+        else [sys.executable, "-B", "-m", "opennpu_quant.export.worker"]
     )
     command = [
         *interpreter,

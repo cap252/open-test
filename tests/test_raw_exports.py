@@ -137,10 +137,15 @@ class RawExportTests(unittest.TestCase):
                 model_name="테스트 모델",
                 origin="standalone_run",
                 complete=True,
+                full_evaluation=True,
                 evaluation_identity="same-evaluation",
                 model_metadata=self.catalog["models"][0],
                 model_source=self.catalog["models"][0]["source"],
-                evidence=dict(model_identity="source", preprocessing_identity="pre"),
+                evidence=dict(
+                    model_identity="source",
+                    preprocessing_identity="pre",
+                    result_hash_verified=True,
+                ),
             )
             for record in self.records
         ]

@@ -178,7 +178,7 @@ These keys belong to the experiment file. Some keys abbreviate a repeated prefix
 | `output.save_qdq_models`, `.save_predictions` | `false` in presets. Boolean | Part of the completed-result identity |
 | `report.primary_metric.<task>` | Recipe or preset metric | Selects among saved metrics. Only ratio units are allowed, and no inference runs |
 | `report.target_mean_recovery` | 98 in `core10`, `null` in `cnn30`. Positive number or `null` | The summary marks whether each condition's cohort mean recovery meets this target ([FP32 pairing and recovery](reporting.md#fp32-pairing-and-recovery)) |
-| `--table-profile opennpu_raw` | Optional for `report` and `results`, default for `reproduce report` | Adds the `raw_data.*` tables with display names and a full/partial split. The evaluation identity is unchanged |
+| `--table-profile opennpu_raw` | Optional for `run`, `report`, `results` and `reproduce report` | Replaces the default `results.*` table with `raw_data.*` tables split into full and partial evaluations. The evaluation identity is unchanged |
 
 The `report.*` settings are part of the `effective_config.json` identity, and editing the configuration of a completed directory breaks result verification. Use `--format` or `--table-profile` to change presentation, and treat any other setting change as a new experiment.
 

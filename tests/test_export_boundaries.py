@@ -125,13 +125,17 @@ class ExportBoundaryTests(unittest.TestCase):
                         "import argparse, json, sys, worker_dependency, opennpu_quant\n"
                         "from pathlib import Path\n"
                         "from importlib.resources import files\n"
-                        "p=argparse.ArgumentParser(); p.add_argument('model'); p.add_argument('--destination')\n"
-                        "a,_=p.parse_known_args(); d=Path(a.destination); d.mkdir(parents=True)\n"
+                        "p=argparse.ArgumentParser(); p.add_argument('model'); p.add_argument('--destination'); p.add_argument('--source-dir')\n"
+                        "a,_=p.parse_known_args(); d=Path(a.destination); d.mkdir(parents=True,exist_ok=True)\n"
+                        "sys.path.insert(0,a.source_dir); import pinned\n"
                         "result=dict(model=a.model, dependency=worker_dependency.value, "
                         "origin=opennpu_quant.origin, resource=json.loads(files(opennpu_quant).joinpath('reference.json').read_text()), "
-                        "executable=sys.executable, sys_path=sys.path)\n"
+                        "executable=sys.executable, sys_path=sys.path, dont_write_bytecode=sys.dont_write_bytecode, pinned=pinned.value)\n"
                         "(d/'model.json').write_text(json.dumps(result))\n"
                     )
+                    upstream = root / layout / "upstream"
+                    upstream.mkdir()
+                    (upstream / "pinned.py").write_text("value = 42\n")
                     for polluted in (False, True):
                         with self.subTest(polluted_environment=polluted):
                             paths = Paths.resolve(
@@ -153,9 +157,22 @@ class ExportBoundaryTests(unittest.TestCase):
                                         PYTHONPATH=str(parent),
                                         PYTHONHOME=str(root / "invalid-python-home"),
                                     )
-                                result = launcher.export(
-                                    "resnet18", paths, python=str(executable)
+                                from opennpu_quant.export.source_archive import (
+                                    verify_source_files,
                                 )
+
+                                for attempt in range(2):
+                                    verify_source_files(upstream, {"pinned.py"})
+                                    result = launcher.export(
+                                        "resnet18",
+                                        paths,
+                                        python=str(executable),
+                                        source=upstream,
+                                    )
+                                    self.assertTrue(result["dont_write_bytecode"])
+                                    self.assertEqual(42, result["pinned"])
+                                    self.assertEqual([], list(upstream.rglob("*.pyc")))
+                                    verify_source_files(upstream, {"pinned.py"})
                             self.assertEqual("child", result["dependency"])
                             self.assertEqual("caller", result["origin"])
                             self.assertEqual({"resource": "caller"}, result["resource"])

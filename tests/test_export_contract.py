@@ -226,6 +226,76 @@ class ExportContractTests(unittest.TestCase):
         ].dim_param = "unrelated"
         self.assertNotEqual(before, graph_contract(model)["structure"])
 
+    def test_numerical_diagnostic_continues_to_graph_checks_and_saves_model(self):
+        model = graph()
+        recipe = dict(
+            name="contract_fixture",
+            task="detection",
+            export=dict(family="fixture"),
+            graphs=dict(network="network.onnx"),
+        )
+        feed = {"images": np.ones((1, 1, 2, 3), np.float32)}
+        expected = outputs(model, [feed])
+        expected[0]["output"] += np.float32(0.5)
+        for mode in ("strict", "functional"):
+            with tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                raw = root / "raw.onnx"
+                onnx.save(model, raw)
+                with patch(
+                    "opennpu_quant.export.finalize.validate_parts",
+                    autospec=True,
+                    return_value={"passed": True},
+                ) as guard:
+                    result = finalize(
+                        raw, recipe, [feed], expected, root, validation=mode
+                    )
+                guard.assert_called_once()
+                self.assertTrue((root / "network.onnx").is_file())
+                self.assertEqual("passed", result["state"])
+                self.assertEqual("differences", result["framework_diagnostics_state"])
+                self.assertFalse(result["framework_parity_passed"])
+                self.assertFalse(result["framework_raw_numerical_passed"])
+                self.assertEqual(
+                    0.5, result["checks"][0]["framework_raw"]["errors"]["output"]
+                )
+                self.assertEqual(0.0, result["checks"][0]["raw_final"]["output"])
+                self.assertEqual(0.0, result["checks"][0]["partition"]["output"])
+
+    def test_missing_fixtures_cannot_be_reported_as_success(self):
+        for feeds, references in (([], []), ([{}], []), ([{}], [{}, {}])):
+            with self.subTest(feeds=feeds, references=references):
+                with self.assertRaisesRegex(ValueError, "one framework reference"):
+                    finalize(None, {}, feeds, references, None)
+
+    def test_raw_final_numerical_failure_is_still_fatal(self):
+        model = graph()
+        recipe = dict(
+            name="contract_fixture",
+            task="detection",
+            export=dict(family="fixture"),
+            graphs=dict(network="network.onnx"),
+        )
+        feed = {"images": np.ones((1, 1, 2, 3), np.float32)}
+        expected = outputs(model, [feed])
+        changed = copy.deepcopy(expected)
+        changed[0]["output"] += np.float32(0.5)
+        for mode in ("strict", "functional"):
+            with tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                raw = root / "raw.onnx"
+                onnx.save(model, raw)
+                with (
+                    patch(
+                        "opennpu_quant.export.finalize.outputs",
+                        autospec=True,
+                        side_effect=[expected, changed],
+                    ),
+                    self.assertRaises(AssertionError),
+                ):
+                    finalize(raw, recipe, [feed], expected, root, validation=mode)
+                self.assertFalse((root / "network.onnx").exists())
+
     def test_structure_guard_is_required_in_both_validation_modes(self):
         model = graph()
         recipe = dict(

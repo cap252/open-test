@@ -35,7 +35,8 @@ These historical checks retain their original scope and source versions. They do
 
 - QDQ parameter, PoT and runtime audits check the ONNX graph that ONNX Runtime executes. They do not validate an NPU's INT8 accumulation or kernel accuracy.
 - Several models take variable input sizes ([Notes on specific models](model-reference.md#notes-on-specific-models)). Deploying them on fixed-input hardware needs a new fixed-shape export and a new FP32/INT8 evaluation, with a review of the CPU host graphs and the integer `Shape` outputs at the device boundary.
-- Export and AdaRound have a `functional` validation mode that records numerical differences and continues. A functional pass is not numerical agreement, and even small output differences need a full evaluation before their effect on accuracy is known.
+- [Export checks](models-and-data.md#export-fp32-onnx) record finite framework differences in both validation modes. Export success does not establish numerical agreement or accuracy.
+- AdaRound compares Torch and ONNX Runtime layer outputs. `strict` stops on tolerance violations, while `functional` records finite differences.
 - Matching CUDA package versions does not guarantee bitwise-equal results. The [GPU environment](reproducing-results.md#gpu-environment-and-numerical-verdicts) section lists what else must match.
 - FP32 accuracy follows each model's packaged evaluation and can differ from published numbers. Known differences in the evaluation conditions are listed under [Notes on specific models](model-reference.md#notes-on-specific-models).
 - Some original measurements lack raw tensors or a compatible prediction stream. Their raw and prediction comparisons stay `pending` even when the metrics match, and a missing comparison is not a pass.

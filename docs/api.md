@@ -63,7 +63,7 @@ AdaRound also reads inputs repeatedly, so prepare its input function in the same
 | `evaluate`, `EvaluationSample`, `TopKClassification` | Measure model accuracy using prepared samples and an evaluator, such as Top-K classification |
 | `OrtConfig`, `save_model`, `prepare_feed_cache` | Choose the execution device, save a model, or cache prepared calibration inputs |
 
-`Scheme()` and `QuantizationConfig()` have different defaults, listed in [Policy objects and defaults](quantization.md#9-policy-objects-and-defaults). AdaRound requires Torch. When enabling AdaRound in `quantize` with previously collected statistics, also supply its input function through `reconstruction_feeds`.
+`Scheme()` and `QuantizationConfig()` have the same defaults, listed in [Policy objects and defaults](quantization.md#9-policy-objects-and-defaults). AdaRound requires Torch. When enabling AdaRound in `quantize` with previously collected statistics, also supply its input function through `reconstruction_feeds`.
 
 <a id="replace-python-postprocessing"></a>
 

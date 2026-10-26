@@ -57,6 +57,10 @@ def evaluate(model, samples, *, evaluator, ort=None, expected_samples=None, limi
     ort = ort or OrtConfig.cpu()
     if limit is not None and (type(limit) is not int or limit < 1):
         raise ValueError("limit must be positive")
+    if expected_samples is not None and (
+        type(expected_samples) is not int or expected_samples < 1
+    ):
+        raise ValueError("expected_samples must be a positive integer")
     session = create_session(model, ort)
     names = [v.name for v in session.get_outputs()]
     seen = set()

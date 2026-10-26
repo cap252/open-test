@@ -109,7 +109,9 @@ LFW smoke manifests and partial results are not accepted for execution, reportin
 opennpu-quant export resnet18
 ```
 
-Export downloads the checkpoint and upstream code pinned in the recipe, verifies their SHA256 hash or commit, converts the model and compares the ONNX outputs with the source framework. Validation defaults to `strict`. `--validation functional` records finite numerical differences and continues, but still rejects shape and dtype errors, non-finite values and graph-partition failures. `model.json` records the export result and the numerical parity separately.
+Export verifies the recipe's pinned checkpoint and source, then creates the ONNX bundle. Both `strict` (default) and `functional` report finite framework-to-ONNX differences in the console and `model.json` without rejecting export. Shape, dtype, non-finite output, graph conversion, partition and Release contract errors still stop export.
+
+Export checks use CPU fixtures and do not establish GPU execution or full-dataset accuracy. For GPU evaluation, run the exported network with `--device cuda:0`. Host graphs remain on CPU.
 
 Running `export` again converts the model again. To evaluate a bundle you already have, skip export and follow [Evaluate an existing ONNX model](run-pipeline.md#evaluate-an-existing-onnx-model). Use `--weights FILE` to reuse an identical source checkpoint, or `--source-dir DIR` for a clean checkout at the pinned commit.
 
@@ -166,7 +168,7 @@ Include the host graphs a model needs, using the file names in its recipe. If `m
 
 A recipe defines the inputs, preprocessing, graph boundaries, decoder, metric and source checkpoint. See the packaged [ResNet-18 recipe](../src/opennpu_quant/resources/models/resnet18.yaml) for an example. A local recipe overrides the bundle settings of a packaged model, as described in [Precedence and local recipes](evaluation-profiles.md#precedence-and-local-recipes).
 
-Models with variable input sizes are checked at three different resolutions during export, and their input caches keep each sample's shape.
+Graphs with symbolic spatial dimensions are checked at three resolutions during export. Models with variable input sizes keep each sample's shape in their input caches.
 
 ## Add a custom model
 

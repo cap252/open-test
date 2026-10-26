@@ -23,6 +23,7 @@ Use `./.tools/uv` if setup installed uv locally. Tests that need Torch, Torchvis
 | `fixtures/pot/golden_40.json` | Expected graph and output hashes for a demo model |
 | `fixtures/public_api_signatures.json` | The public API contract |
 | `fixtures/preset_contracts.json` | Ordered effective configurations and condition lists for the two standalone presets. Update only for an intentional settings change |
+| `fixtures/release_export_reference.json` | Release contract ID and export settings for 38 recipes. Update only for a reviewed, intentional export change |
 | `fixtures/documented_internals.json` | Signatures of the non-public names that README and docs import |
 | `fixtures/opennpu_raw_format.json` | Columns, display names and schemes of the 15-column table |
 | `library_fixtures.py` | A toy model and feeds shared by tests |
@@ -64,6 +65,10 @@ The Python postprocessing example uses `ModelEvaluator` and `resolve` as extensi
 |---|---|
 | `test_cnn38.py` | The exact cnn30 model order and task counts, unchanged core10 and cnn30 settings, the 38-model catalog, strict/functional validation, export rewrites (face grids, fixed upsample, DFL split, constant Floor), dynamic input caches and AdaRound windows, decoders, float/PoT scale audits, DepthToSpace |
 | `test_tensorflow_export.py` | Mocked SSD/DeepLab converter calls forward the recipe opset (no real TensorFlow conversion) |
+| `test_export_contract.py` | Release structure, tensor values and QDQ edges in both modes, allowed naming, metadata and independent node order differences, packaged checksum and export settings |
+| `test_export_boundaries.py` | Network/host boundaries, export/runtime input agreement and recorded export settings |
+| `test_source_archive.py` | Pinned archives: reuse, tampering, extraction recovery, links and path safety |
+| `test_protobuf_compat.py` | Current and legacy descriptor APIs, and ONNX traversal with the installed protobuf runtime |
 | `test_model_bundle.py` | Exported folders with and without `model.json`, mapping precedence, tampering, explicit graph paths and output aliases |
 | `test_preprocessing_reliability.py` | Custom preprocessing never reuses cached feeds, and built-in caches invalidate on setting or dependency changes, or on ORT code changes when a CPU graph runs |
 | `test_metrics.py` | Exact integer Top-K ordering, ties at top-1/top-5, input preservation, WIDER FACE AP edge cases, COCO undefined values |
@@ -84,6 +89,7 @@ The fixed-angle math check uses [20 high-precision reference cases](fixtures/fac
 | `test_portable.py` | End-to-end local run with resume, reuse and tampering, statistics relocation, downloads and archives, checkout cleanup and ImageNet preparation |
 | `test_dataset_download.py` | COCO/VOC downloads from small local archives, CLI preparation, keypoint inputs, VOC layout, reuse and missing-file repair, checksums, conflicting files, unsafe archives and existing manifest validation |
 | `test_result_reliability.py` | Result reuse evidence, invalidation by graph or data changes, forced recompute, stale files, original errors, undefined primary metric |
+| `test_code_identity.py` | Identity changes for nested Python edits, renames, additions and deletions, and ignores non-Python files |
 | `test_cache_concurrency.py` | Concurrent input and statistics readers, one input-cache builder, waiting writers, failure recovery, process exit, interruption and integrity checks after waiting |
 | `test_recalibrate.py` | `--recalibrate` generations, partial and interrupted runs, the source files in the statistics cache key |
 | `test_results.py` | `results` tables: units, FP32 pairing, identity mismatches, historical-origin rejection before export, Excel/Unicode, partial denominators |
@@ -98,6 +104,8 @@ The fixed-angle math check uses [20 high-precision reference cases](fixtures/fac
 |---|---|
 | `test_gpu_reproduction.py` | Fixed-graph CLI contracts on a small real ONNX model: replay, repeats, comparison, missing references, model/input/profile tampering, resume, relocation, CUDA wheel lookup and separate GPU identities, an FP32/INT8 pair with QDQ audits and recovery, output aliases and restored Torch settings. The installed-wheel checks also load all 266 selected conditions |
 | `test_final_reproduction.py` | YOLOv9-T/S family binding, source condition settings and calibration input guards, the independent PoseNet split, original classification ties without changing the public API, mixed full-dataset limits, compact resume and tamper detection, and separate metric and prediction-stream verdicts |
+| `test_lfw_cache_regeneration.py` | LFW cache generation and reuse against reference hashes, tampering, interruption, relocation and CLI dispatch |
+| `test_external_reproduction.py` | External weight integrity, missing files, path safety, legacy results and resume. Sparse external data is rejected, embedded sparse weights are supported |
 | `test_reproduction_model_sets.py` | The `cnn30` default, explicit core10/cnn30/all/model selection, unchanged original entries and condition settings, custom selections, conflicting options, and CPU replay/resume/reporting of packages with additional models |
 | `test_repeat_outputs.py` | Replay repeats through `run_tensors`: requested output order, independent copies of pass-through outputs, missing inputs and compact resume |
 | `test_reproduction_checks.py` | Raw tensor tolerances, prediction ordering and artifact tampering |

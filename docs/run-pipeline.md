@@ -38,7 +38,7 @@ To change percentiles, conditions or other settings, copy a preset and edit it, 
 
 Use the same model and data directories for preparation and execution. `--home` defaults to `./workspace`, and individual path options override its subdirectories. For `run`, `--output` is the parent of the run directory, so `--output workspace/example-runs` with the `core10` preset writes to `workspace/example-runs/core10`. [Workspace paths](configuration.md#workspace-paths) lists every path option and its precedence.
 
-The main presets run on `cuda:0`. An experiment file sets the device with `runtime.device`, and `--device` overrides it. CPU host graphs and postprocessing always run on the CPU, also during GPU execution.
+The main presets run `network.onnx` on `cuda:0`. An experiment file sets the device with `runtime.device`, and `--device` overrides it. CPU host graphs and postprocessing always run on the CPU, also during GPU execution.
 
 ## Evaluate an existing ONNX model
 
@@ -51,7 +51,7 @@ opennpu-quant run -c core10 --models resnet18 --conditions fp32 \
   --output workspace/fp32-check
 ```
 
-With FP32 as the only condition, the command runs inference, postprocessing and evaluation without calibration or quantization. If the same command already completed in that output directory, the tool verifies the stored result and reuses it without running inference again.
+FP32-only evaluation needs no calibration data or quantization. It runs inference, postprocessing and evaluation, and verifies completed results before reusing them.
 
 | Goal | Path |
 |---|---|
@@ -89,6 +89,7 @@ Reuse depends on an **identity**: a content hash of the code, model graphs, inpu
 - **`--recalibrate`** writes a per-model `recalibration.json` whose generation is the current execution ID. Later runs keep using that generation while the file exists, even without the flag.
 - **Code changes** also change the identity, because it covers every packaged `.py` file. After updating the package, even for a comment, earlier results and AdaRound checkpoints are no longer reused. Use a new `--output` or rerun with `--force`, and never edit stored hashes to force reuse.
 - **Caches** use identities separate from completed results. An input or statistics cache is reused when its inputs, settings, environment and source hashes listed in the table match. A code change outside those source files does not invalidate it on its own, while any edit to one of them, even a comment, does.
+- **CPU environment changes** can affect preprocessing and metrics even during GPU runs, so CPU numerical settings are checked before result reuse.
 - **Memory budgets** such as `--host-cache-gib` are part of the identity, so changing them reports "Run configuration changed".
 - **Concurrent runs** can read completed input and statistics caches together. Cache creation and publication use an exclusive lock, so a competing cache access waits and then validates the data. A wait can be interrupted, and process exit releases the lock. Concurrent writers to the same run directory or AdaRound checkpoint still fail immediately.
 - There is no cache-cleaning command. Delete a cache directory when no run is using it.

@@ -218,7 +218,7 @@ opennpu-quant reproduce compare --actual workspace/repro/server-b-resnet18-3-run
 
 The reference environment uses CUDA runtime **12.4.127**, cuBLAS **12.4.5.8**, cuDNN **9.1.0.70** and ONNX Runtime **1.20.2**, with batch size 1, one thread, `ORT_DISABLE_ALL` and TF32 disabled. Each run records the package versions together with the SHA256 hashes of the libraries actually loaded. Comparisons also include the GPU model and UUID, the driver, the CPU postprocessing libraries, the provider options and any CPU fallback.
 
-The environment identity is recorded after the Torchvision libraries used for CPU postprocessing are loaded, so model order and lazy loading do not change it. In these records, `not_loaded` and `content_changed` are different states.
+Hardware and loaded libraries can differ even with the same execution settings. Missing required environment evidence leaves environment agreement `pending`.
 
 Hashes establish that the recorded model files, inputs and saved artifacts are unchanged. Output agreement uses the separate rules below, so a hash check is not itself a numerical tolerance test.
 

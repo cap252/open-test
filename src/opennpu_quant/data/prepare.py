@@ -193,12 +193,41 @@ def prepare(name, root, destination, *, source="folder", download=False):
 
 def wider_ground_truth(root):
     from scipy.io import loadmat
+    from scipy.io.matlab import MatReadError
 
     truth = root / "eval_tools/ground_truth"
-    face = loadmat(truth / "wider_face_val.mat")
+    names = [
+        "wider_face_val.mat",
+        *(f"wider_{s}_val.mat" for s in ("easy", "medium", "hard")),
+    ]
+    for name in names:
+        if not (truth / name).is_file():
+            raise FileNotFoundError(
+                f"Missing WIDER FACE ground truth: {truth / name}. "
+                "Extract the official evaluation tools under <root>/eval_tools/ "
+                "with all four validation .mat files in ground_truth/"
+            )
+    loaded = {}
+    for name in names:
+        try:
+            loaded[name] = loadmat(truth / name)
+        except (OSError, ValueError, TypeError, IndexError, MatReadError) as error:
+            raise ValueError(
+                f"Invalid WIDER FACE ground truth: {truth / name}: {error}"
+            ) from error
+        required = (
+            ("event_list", "file_list", "face_bbx_list")
+            if name == "wider_face_val.mat"
+            else ("gt_list",)
+        )
+        missing = set(required) - loaded[name].keys()
+        if missing:
+            raise ValueError(
+                f"Invalid WIDER FACE ground truth: {truth / name}: missing {', '.join(sorted(missing))}"
+            )
+    face = loaded["wider_face_val.mat"]
     kept = {
-        s: loadmat(truth / f"wider_{s}_val.mat")["gt_list"]
-        for s in ("easy", "medium", "hard")
+        s: loaded[f"wider_{s}_val.mat"]["gt_list"] for s in ("easy", "medium", "hard")
     }
     rows = []
     for ei, event in enumerate(face["event_list"]):

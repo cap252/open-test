@@ -112,3 +112,56 @@ class SourceArchiveTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unsafe"):
             checkout_archive(recipe, self.root)
         self.assertFalse((self.root / "escape.py").exists())
+
+    def test_additional_import_files_are_rejected_without_modification(self):
+        recipe = self.archive_recipe()
+        source = checkout_archive(recipe, self.root)
+        for name in (
+            "model/__init__.py",
+            "extra.py",
+            "extra.pyc",
+            "extension.so",
+            "__pycache__/extra.cpython-311.pyc",
+        ):
+            with self.subTest(name=name):
+                extra = source / name
+                extra.parent.mkdir(parents=True, exist_ok=True)
+                extra.write_bytes(b"added")
+                with self.assertRaisesRegex(
+                    ValueError, "Unpinned upstream import source"
+                ):
+                    checkout_archive(recipe, self.root)
+                self.assertEqual(b"added", extra.read_bytes())
+                extra.unlink()
+
+    def test_git_ignored_import_files_are_also_rejected(self):
+        import subprocess
+        from opennpu_quant.export.torch_models import checkout
+
+        source = self.root / "git-source"
+        source.mkdir()
+        for args in (
+            ["init"],
+            ["config", "user.email", "test@example.invalid"],
+            ["config", "user.name", "Fixture"],
+        ):
+            subprocess.run(
+                ["git", "-C", str(source), *args], check=True, capture_output=True
+            )
+        (source / "model.py").write_text("value = 1\n")
+        (source / ".gitignore").write_text("model/\n")
+        subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(source), "commit", "-m", "fixture"],
+            check=True,
+            capture_output=True,
+        )
+        commit = subprocess.check_output(
+            ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+        ).strip()
+        recipe = dict(name="toy", source=dict(repo=str(source), commit=commit))
+        self.assertEqual(source, checkout(recipe, self.root, source))
+        (source / "model").mkdir()
+        (source / "model/__init__.py").write_text("value = 2\n")
+        with self.assertRaisesRegex(ValueError, "Unpinned upstream import source"):
+            checkout(recipe, self.root, source)

@@ -5,7 +5,14 @@ device=cuda
 with_data=0
 while (($#)); do
   case "$1" in
-    --device) device="$2"; shift 2 ;;
+    --device)
+      if (($# < 2)) || [[ -z "$2" || "$2" == --* ]]; then
+        echo '--device requires cpu or cuda. Usage: ./setup.sh [--device cuda|cpu] [--data]' >&2
+        exit 2
+      fi
+      device="$2"
+      shift 2
+      ;;
     --data) with_data=1; shift ;;
     --help|-h) echo 'Usage: ./setup.sh [--device cuda|cpu] [--data] (default: cuda)'; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;

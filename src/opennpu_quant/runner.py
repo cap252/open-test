@@ -185,9 +185,11 @@ class _ModelRun:
         # Bundle location and external-data filenames are not model identity.
         self.graphs = {k: model_identity(v) for k, v in self.bundle.paths.items()}
         self._identify_inputs(config["evaluation"]["limit"])
-        self.count = config["calibration"]["samples"][dataset_name]
-        self.factory = self.dataset.feeds(self.bundle, self.count)
-        self.calibration_data = self.dataset.identity("calibration", self.count)
+        self.count = self.factory = self.calibration_data = None
+        if any(config["conditions"].values()):
+            self.count = config["calibration"]["samples"][dataset_name]
+            self.factory = self.dataset.feeds(self.bundle, self.count)
+            self.calibration_data = self.dataset.identity("calibration", self.count)
         self.request_path = out / name / "recalibration.json"
         self.request = (
             read_json(self.request_path) if self.request_path.exists() else None
@@ -304,10 +306,10 @@ class _ModelRun:
                 policy,
                 scheme.to_dict() if scheme else None,
                 self.config["adaround"] if policy.get("adaround") else None,
-                self.config.get("activation_cache"),
-                self.count,
-                self.calibration_data,
-                self.config["calibration"],
+                self.config.get("activation_cache") if policy else None,
+                self.count if policy else None,
+                self.calibration_data if policy else None,
+                self.config["calibration"] if policy else None,
                 self.config["evaluation"]["limit"],
             ]
         )

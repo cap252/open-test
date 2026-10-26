@@ -49,6 +49,79 @@ class CliUsabilityTests(unittest.TestCase):
             self.assertIn(word, message)
         return message
 
+    def test_setup_requires_a_device_value_before_installing(self):
+        script = Path(__file__).resolve().parents[1] / "setup.sh"
+        for tail in (["--device"], ["--device", ""], ["--device", "--data"]):
+            with self.subTest(arguments=tail):
+                result = subprocess.run(
+                    ["bash", str(script), *tail], capture_output=True, text=True
+                )
+                self.assertEqual(2, result.returncode)
+                self.assertIn("--device requires cpu or cuda", result.stderr)
+                self.assertIn("Usage:", result.stderr)
+                self.assertNotIn("unbound variable", result.stderr)
+                self.assertEqual("", result.stdout)
+
+    def test_wider_missing_annotations_name_each_file_without_publishing(self):
+        truth = self.root / "wider/eval_tools/ground_truth"
+        truth.mkdir(parents=True)
+        names = [
+            "wider_face_val.mat",
+            "wider_easy_val.mat",
+            "wider_medium_val.mat",
+            "wider_hard_val.mat",
+        ]
+        for name in names:
+            (truth / name).write_bytes(b"not loaded when a required file is missing")
+        for name in names:
+            with self.subTest(missing=name):
+                (truth / name).unlink()
+                with patch("scipy.io.loadmat") as load:
+                    self.assert_error(
+                        [
+                            "data",
+                            "prepare",
+                            "widerface",
+                            "--root",
+                            str(self.root / "wider"),
+                            "--home",
+                            str(self.root / "home"),
+                        ],
+                        "Missing WIDER FACE ground truth",
+                        name,
+                        "eval_tools",
+                    )
+                    load.assert_not_called()
+                self.assertFalse(
+                    (self.root / "home/data/widerface/manifest.json").exists()
+                )
+                (truth / name).write_bytes(b"not loaded")
+
+    def test_wider_corrupt_annotation_is_a_cli_error(self):
+        truth = self.root / "wider/eval_tools/ground_truth"
+        truth.mkdir(parents=True)
+        for name in (
+            "wider_face_val.mat",
+            "wider_easy_val.mat",
+            "wider_medium_val.mat",
+            "wider_hard_val.mat",
+        ):
+            (truth / name).write_bytes(b"broken")
+        self.assert_error(
+            [
+                "data",
+                "prepare",
+                "widerface",
+                "--root",
+                str(self.root / "wider"),
+                "--home",
+                str(self.root / "home"),
+            ],
+            "Invalid WIDER FACE ground truth",
+            "wider_face_val.mat",
+        )
+        self.assertFalse((self.root / "home/data/widerface/manifest.json").exists())
+
     def test_demo_prints_only_json_and_validates_its_device(self):
         code, out, _ = self.invoke(["demo", "--device", "cpu"])
         self.assertEqual(0, code)

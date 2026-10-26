@@ -7,6 +7,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from ..ort.cpu_environment import cpu_environment
 from ..ort.cuda_libs import loaded_libraries, loaded_driver_libraries, compare_libraries
 
 EXPECTED = {
@@ -57,6 +58,7 @@ def capture(*, libraries=False):
         system=platform.system(),
         machine=platform.machine(),
         cpu=platform.processor(),
+        cpu_numerics=cpu_environment(),
         libc=platform.libc_ver(),
         cuda_visible_devices=os.environ.get("CUDA_VISIBLE_DEVICES"),
         gpu=gpu,
@@ -96,6 +98,28 @@ def compare(actual, expected):
             left, right = normalized(left), normalized(right)
         if left != right:
             mismatches.append(key)
+    unverified_fields = []
+    for key in ("cpu_numerics",):
+        if actual.get(key) is None or expected.get(key) is None:
+            unverified_fields.append(key)
+        elif actual[key] != expected[key]:
+            mismatches.append(key)
+    drivers = {}
+    if gpu:
+        if not actual.get("kernel_driver") or not expected.get("kernel_driver"):
+            unverified_fields.append("kernel_driver")
+        elif actual["kernel_driver"] != expected["kernel_driver"]:
+            mismatches.append("kernel_driver")
+        drivers = compare_libraries(
+            actual.get("driver_libraries", {"libraries": []}),
+            expected.get("driver_libraries", {"libraries": []}),
+        )
+        if "content_changed" in drivers.values():
+            mismatches.append("driver library contents")
+        if not any(name.startswith("libcuda.so") for name in drivers) or any(
+            state != "matched" for state in drivers.values()
+        ):
+            unverified_fields.append("driver_libraries")
     libraries = compare_libraries(
         actual.get("loaded_libraries", {"libraries": []}),
         expected.get("loaded_libraries", {"libraries": []}),
@@ -126,9 +150,15 @@ def compare(actual, expected):
         or any(v in ("not_loaded", "unverifiable") for v in libraries.values())
     )
     return dict(
-        state="fail" if mismatches else "pending" if gpu and unverified else "pass",
+        state="fail"
+        if mismatches
+        else "pending"
+        if unverified_fields or (gpu and unverified)
+        else "pass",
         mismatches=mismatches,
         libraries=libraries,
+        drivers=drivers,
+        unverified_fields=unverified_fields,
         not_loaded=missing,
         gpu_comparison=gpu,
     )

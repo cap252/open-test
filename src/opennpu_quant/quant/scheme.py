@@ -1,6 +1,9 @@
 from dataclasses import dataclass, asdict
 from .config import CalibrationConfig, QuantizationConfig
 
+# Keep the compact representation's defaults tied to the full policy.
+_DEFAULT_POLICY = QuantizationConfig()
+
 
 @dataclass(frozen=True)
 class Scheme:
@@ -24,7 +27,7 @@ class Scheme:
     histogram_bins, quantized_bins : int
         Defaults 2048 and 128; 2 <= quantized_bins <= histogram_bins.
 
-    Scheme() defaults differ from QuantizationConfig(); conversion is explicit.
+    Scheme().config() equals QuantizationConfig(); conversion preserves the policy.
 
     Examples
     --------
@@ -34,15 +37,15 @@ class Scheme:
     >>> assert config.weight_granularity == 'per_channel'
     """
 
-    scope: str = "all"
-    activation_symmetric: bool = False
-    weight_granularity: str = "per_channel"
-    method: str = "percentile"
-    percentile: float | None = 99.99
-    activation_scale: str = "float"
-    weight_scale: str = "float"
-    histogram_bins: int = 2048
-    quantized_bins: int = 128
+    scope: str = _DEFAULT_POLICY.scope
+    activation_symmetric: bool = _DEFAULT_POLICY.activation_symmetric
+    weight_granularity: str = _DEFAULT_POLICY.weight_granularity
+    method: str = _DEFAULT_POLICY.calibration.method.lower()
+    percentile: float | None = _DEFAULT_POLICY.calibration.percentile_value
+    activation_scale: str = _DEFAULT_POLICY.activation_scale_policy
+    weight_scale: str = _DEFAULT_POLICY.weight_scale_policy
+    histogram_bins: int = _DEFAULT_POLICY.calibration.histogram_bins
+    quantized_bins: int = _DEFAULT_POLICY.calibration.quantized_bins
 
     def __post_init__(self):
         self.config()

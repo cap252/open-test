@@ -1,5 +1,5 @@
 from pathlib import Path
-import argparse, tempfile
+import argparse, tempfile, sys
 from .._io import atomic_json, sha256, now
 from .._locking import RunLock
 from ..models.spec import ModelSpec
@@ -7,6 +7,7 @@ from ..models.preprocess import preprocess
 from .fixtures import synthetic_image
 from .torch_models import checkpoint, checkout
 from .finalize import finalize
+from .parity import diagnostic_lines
 
 
 def main():
@@ -132,6 +133,9 @@ def main():
                 created=now(),
             ),
         )
+
+        for line in diagnostic_lines(recipe["name"], result):
+            print(line, file=sys.stderr)
 
 
 if __name__ == "__main__":

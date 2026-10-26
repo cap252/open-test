@@ -132,8 +132,9 @@ class PortableTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             compare({"logits": a}, {"logits": b})
         b[0, 0] = 0.001
-        with self.assertRaises(ValueError):
-            framework_compare({"logits": a}, {"logits": b}, recipe)
+        result = framework_compare({"logits": a}, {"logits": b}, recipe)
+        self.assertFalse(result["effective_passed"])
+        self.assertEqual("differences", result["state"])
         self.assertEqual(1e-5, AdaroundConfig().atol)
 
     def test_atomic_download_and_archive_escape(self):

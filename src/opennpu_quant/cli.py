@@ -7,6 +7,7 @@ user can fix (bad settings, missing files) exit with code 2 and a one-line messa
 import argparse
 import contextlib
 import json
+import math
 import os
 from pathlib import Path
 import sys
@@ -225,7 +226,7 @@ def build_parser():
         "--validation",
         choices=("strict", "functional"),
         default="strict",
-        help="Functional mode records numerical parity failures. Structural checks remain mandatory",
+        help="Both modes report framework numerical differences without rejecting export. Graph integrity checks remain mandatory",
     )
     export.set_defaults(handler=_export)
 
@@ -646,10 +647,14 @@ def _apply_run_overrides(config, args):
     if args.save_predictions:
         config["output"]["save_predictions"] = True
     cache = config.setdefault("activation_cache", {})
-    if args.host_cache_gib is not None:
-        cache["host_bytes"] = int(args.host_cache_gib * 1024**3)
-    if args.gpu_window_mib is not None:
-        cache["device_bytes"] = int(args.gpu_window_mib * 1024**2)
+    for value, field, unit, option in (
+        (args.host_cache_gib, "host_bytes", 1024**3, "--host-cache-gib"),
+        (args.gpu_window_mib, "device_bytes", 1024**2, "--gpu-cache-mib"),
+    ):
+        if value is not None:
+            if value < 0 or not math.isfinite(value) or not math.isfinite(value * unit):
+                raise ValueError(f"{option} must be a finite nonnegative byte budget")
+            cache[field] = int(value * unit)
     if args.no_cache:
         cache["enabled"] = False
     if args.no_input_cache:

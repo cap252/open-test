@@ -24,6 +24,8 @@ from tests.ort.test_pot_quantization import shared_graph, shared_feeds
 
 SMALL = AdaroundConfig(steps=4, batch_size=2, window_samples=2, window_steps=2)
 QCONFIG = QuantizationConfig(
+    calibration=CalibrationConfig(),
+    activation_symmetric=True,
     scope="all",
     weight_granularity="per_channel",
     activation_scale_policy="pot_ceil",

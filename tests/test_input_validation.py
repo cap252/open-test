@@ -448,5 +448,193 @@ class ErrorMessageTests(unittest.TestCase):
                 export("resnet18", paths)
 
 
+class AuditBoundaryTests(unittest.TestCase):
+    """Invalid public inputs must fail before execution or result publication."""
+
+    def test_cli_memory_budgets_reject_nonfinite_without_creating_outputs(self):
+        for flag in ("--host-cache-gib", "--gpu-cache-mib", "--gpu-window-mib"):
+            for value in ("nan", "inf", "-inf", "-0.5", "1e308"):
+                with self.subTest(flag=flag, value=value):
+                    with tempfile.TemporaryDirectory() as folder:
+                        home = Path(folder) / "new-home"
+                        stderr = io.StringIO()
+                        with (
+                            contextlib.redirect_stdout(io.StringIO()),
+                            contextlib.redirect_stderr(stderr),
+                            patch("opennpu_quant.runner.run") as execute,
+                        ):
+                            with self.assertRaises(SystemExit) as caught:
+                                main(["run", "--home", str(home), f"{flag}={value}"])
+                        self.assertEqual(2, caught.exception.code)
+                        self.assertIn("finite nonnegative", stderr.getvalue())
+                        self.assertNotIn("Traceback", stderr.getvalue())
+                        execute.assert_not_called()
+                        self.assertFalse(home.exists())
+
+    def test_cli_memory_budgets_keep_zero_and_fractional_values(self):
+        from opennpu_quant.cli import build_parser, _apply_run_overrides
+
+        for flag, field, unit in (
+            ("--host-cache-gib", "host_bytes", 1024**3),
+            ("--gpu-cache-mib", "device_bytes", 1024**2),
+            ("--gpu-window-mib", "device_bytes", 1024**2),
+        ):
+            for value in (0.0, 0.5, 2.25):
+                with self.subTest(flag=flag, value=value):
+                    config = small_config()
+                    args = build_parser().parse_args(["run", flag, str(value)])
+                    _apply_run_overrides(config, args)
+                    validate(config)
+                    self.assertEqual(
+                        int(value * unit), config["activation_cache"][field]
+                    )
+
+    def test_calibration_types_are_checked_at_construction(self):
+        from opennpu_quant import CalibrationConfig, Scheme
+
+        for field in ("histogram_bins", "quantized_bins"):
+            for value in (True, 128.5, "128", float("nan"), float("inf")):
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(ValueError, field):
+                        CalibrationConfig(**{field: value})
+                    with self.assertRaisesRegex(ValueError, field):
+                        Scheme(**{field: value})
+        for value in (
+            True,
+            False,
+            "99.99",
+            float("nan"),
+            float("inf"),
+            0,
+            101,
+            10**1000,
+        ):
+            with self.subTest(percentile=value):
+                with self.assertRaisesRegex(ValueError, "Percentile"):
+                    CalibrationConfig.percentile(value)
+        for value in (0.001, 1, 99.99, 100):
+            self.assertEqual(
+                value, CalibrationConfig.percentile(value).percentile_value
+            )
+        self.assertEqual(128, CalibrationConfig(histogram_bins=128).quantized_bins)
+
+    def test_quantization_flags_and_calibration_types_fail_early(self):
+        from opennpu_quant import CalibrationConfig, QuantizationConfig, Scheme
+
+        for field in ("activation_symmetric", "weight_symmetric"):
+            for value in ("false", 0, 1, None, float("nan")):
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(ValueError, field):
+                        QuantizationConfig(**{field: value})
+        with self.assertRaisesRegex(ValueError, "activation_symmetric"):
+            Scheme(activation_symmetric="false")
+        for value in ({}, None, True, "MinMax"):
+            with self.subTest(calibration=value):
+                with self.assertRaisesRegex(
+                    TypeError, "calibration.*CalibrationConfig"
+                ):
+                    QuantizationConfig(calibration=value)
+        for symmetric in (True, False):
+            config = QuantizationConfig(activation_symmetric=symmetric)
+            self.assertIs(symmetric, config.scheme()["activation_symmetric"])
+            self.assertEqual(config, QuantizationConfig.from_dict(config.to_dict()))
+        self.assertEqual(
+            "Entropy",
+            QuantizationConfig(calibration=CalibrationConfig.entropy()).scheme()[
+                "method"
+            ],
+        )
+
+    def test_ort_integer_arguments_fail_before_session_creation(self):
+        from opennpu_quant import OrtConfig
+
+        for field in ("intra_op_threads", "inter_op_threads"):
+            for value in (True, 1.5, "1", float("nan"), float("inf"), -1):
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(ValueError, field):
+                        OrtConfig(**{field: value})
+        for value in (True, 1.5, "1024", float("nan"), float("inf"), 0, -1):
+            with self.subTest(memory_limit=value):
+                with self.assertRaisesRegex(ValueError, "memory_limit"):
+                    OrtConfig.cuda(memory_limit=value)
+        self.assertEqual(
+            0, OrtConfig.cpu(intra_op_threads=0, inter_op_threads=0).intra_op_threads
+        )
+        self.assertEqual(
+            "1024",
+            dict(OrtConfig.cuda(2, memory_limit=1024).provider_options[0])[
+                "gpu_mem_limit"
+            ],
+        )
+
+    def test_expected_count_rejected_before_consuming_samples_or_creating_session(self):
+        from opennpu_quant import evaluate, TopKClassification
+
+        for value in (True, 1.5, "1", 0, -1, float("nan"), float("inf")):
+            with self.subTest(expected_samples=value):
+                with patch("opennpu_quant.evaluation.loop.create_session") as session:
+                    with self.assertRaisesRegex(ValueError, "expected_samples"):
+                        evaluate(
+                            None,
+                            None,
+                            evaluator=TopKClassification(),
+                            expected_samples=value,
+                            limit=1,
+                        )
+                    session.assert_not_called()
+
+    def test_invalid_classification_targets_do_not_change_evaluator_state(self):
+        import numpy as np
+        from opennpu_quant import EvaluationSample, TopKClassification
+
+        evaluator = TopKClassification()
+        logits = np.arange(6, dtype=np.float32).reshape(1, 6)
+        evaluator.update({"logits": logits}, EvaluationSample("valid", {}, 5))
+        before = (
+            evaluator.count,
+            dict(evaluator.correct),
+            copy.deepcopy(evaluator.prediction),
+        )
+        for value in (
+            True,
+            np.bool_(True),
+            5.9,
+            np.float32(5.9),
+            float("nan"),
+            float("inf"),
+            -1,
+            6,
+            "5.9",
+        ):
+            with self.subTest(target=value):
+                with self.assertRaisesRegex(ValueError, "target"):
+                    evaluator.update(
+                        {"logits": logits}, EvaluationSample("bad", {}, value)
+                    )
+                self.assertEqual(
+                    before, (evaluator.count, evaluator.correct, evaluator.prediction)
+                )
+        # Existing lossless integer conversions remain accepted.
+        for value in (5, np.int64(5), 5.0, "5"):
+            evaluator.reset()
+            evaluator.update({"logits": logits}, EvaluationSample("valid", {}, value))
+            self.assertEqual({"top1": 1.0, "top5": 1.0}, evaluator.finalize())
+
+    def test_expected_count_preserves_full_and_partial_evaluation(self):
+        from opennpu_quant import evaluate
+        from tests.library_fixtures import toy_model, samples, evaluator
+
+        full = evaluate(
+            toy_model(), samples(), evaluator=evaluator(), expected_samples=4
+        )
+        partial = evaluate(
+            toy_model(), samples(), evaluator=evaluator(), expected_samples=4, limit=2
+        )
+        self.assertTrue(full.complete)
+        self.assertEqual(4, full.samples)
+        self.assertFalse(partial.complete)
+        self.assertEqual(2, partial.samples)
+
+
 if __name__ == "__main__":
     unittest.main()

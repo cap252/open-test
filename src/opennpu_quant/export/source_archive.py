@@ -1,6 +1,7 @@
 """Content-pinned source archives, including verified local extracted copies."""
 
 import hashlib
+import os
 from pathlib import Path, PurePosixPath
 import sys
 import tempfile
@@ -32,8 +33,27 @@ def _documentation_links(source):
     }
 
 
+def verify_source_files(target, expected):
+    """Reject additional importable files, including ignored Git files and bytecode."""
+    for root, directories, files in os.walk(target, followlinks=False):
+        directories[:] = [name for name in directories if name != ".git"]
+        for name in directories + files:
+            path = Path(root) / name
+            relative = path.relative_to(target).as_posix()
+            if relative in expected:
+                continue
+            if path.is_symlink() or path.suffix.lower() in (
+                ".py",
+                ".pyc",
+                ".pyo",
+                ".so",
+                ".pyd",
+            ):
+                raise ValueError("Unpinned upstream import source: " + relative)
+
+
 def _verify(zipped, target, text_links):
-    roots, missing, links = set(), [], set()
+    roots, missing, links, expected = set(), [], set(), set()
     for info in zipped.infolist():
         name = PurePosixPath(info.filename)
         if name.is_absolute() or ".." in name.parts or not name.parts:
@@ -42,6 +62,7 @@ def _verify(zipped, target, text_links):
         if info.is_dir():
             continue
         rel = Path(*name.parts[1:])
+        expected.add(rel.as_posix())
         value = zipped.read(info)
         if (info.external_attr >> 16) & 0o170000 == 0o120000:
             if text_links.get(info.filename, "").encode() != value:
@@ -56,6 +77,7 @@ def _verify(zipped, target, text_links):
             raise ValueError("Pinned upstream source changed: " + str(rel))
     if len(roots) != 1 or links != set(text_links):
         raise ValueError("Pinned source archive layout changed")
+    verify_source_files(target, expected)
     if missing:
         raise FileNotFoundError("Missing pinned source: " + missing[0])
 

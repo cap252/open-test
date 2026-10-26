@@ -216,11 +216,13 @@ class ValidationFixTests(unittest.TestCase):
         b = a.copy()
         b[0, -2:] = b[0, -2:][::-1]
         np.testing.assert_allclose(a, b, atol=1e-5, rtol=1e-4)
-        with self.assertRaisesRegex(ValueError, "Top5"):
-            framework_compare({"logits": a}, {"logits": b}, recipe)
+        result = framework_compare({"logits": a}, {"logits": b}, recipe)
+        self.assertFalse(result["quality"]["decisions"]["top5_order"]["passed"])
+        self.assertFalse(result["effective_passed"])
         b[0, 0] = 5e-5
-        with self.assertRaisesRegex(ValueError, "Top5"):
-            framework_compare({"logits": a}, {"logits": b}, recipe)
+        result = framework_compare({"logits": a}, {"logits": b}, recipe)
+        self.assertFalse(result["quality"]["decisions"]["top5_order"]["passed"])
+        self.assertFalse(result["effective_passed"])
         self.assertTrue(
             framework_compare({"logits": a}, {"logits": a.copy()}, recipe)[
                 "strict_passed"

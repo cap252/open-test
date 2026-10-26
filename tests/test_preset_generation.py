@@ -158,7 +158,7 @@ class PresetGenerationTests(unittest.TestCase):
                         )
                         self.assertEqual(explicit.name, scheme.name)
 
-    def test_api_policy_defaults_and_other_methods_are_preserved(self):
+    def test_api_policy_defaults_agree_and_other_methods_are_preserved(self):
         compact, explicit = Scheme().config(), QuantizationConfig()
         self.assertEqual(
             ("all", False, "per_channel", "Percentile", 99.99),
@@ -170,16 +170,12 @@ class PresetGenerationTests(unittest.TestCase):
                 compact.calibration.percentile_value,
             ),
         )
-        self.assertEqual(
-            ("basic", True, "per_tensor", "MinMax", None),
-            (
-                explicit.scope,
-                explicit.activation_symmetric,
-                explicit.weight_granularity,
-                explicit.calibration.method,
-                explicit.calibration.percentile_value,
-            ),
-        )
+        self.assertEqual(compact, explicit)
+        self.assertEqual(compact.scheme(), explicit.scheme())
+        self.assertEqual(Scheme().name, explicit.name)
+        self.assertEqual(explicit, QuantizationConfig.from_dict({}))
+        self.assertEqual(explicit, QuantizationConfig.from_dict(explicit.to_dict()))
+        self.assertEqual(Scheme(), Scheme.from_dict(Scheme().to_dict()))
         for method, calibration in (
             ("minmax", CalibrationConfig()),
             ("entropy", CalibrationConfig.entropy()),
@@ -191,9 +187,60 @@ class PresetGenerationTests(unittest.TestCase):
                 method=method,
                 percentile=None,
             )
-            explicit = QuantizationConfig(calibration=calibration)
+            explicit = QuantizationConfig(
+                scope="basic",
+                activation_symmetric=True,
+                weight_granularity="per_tensor",
+                calibration=calibration,
+            )
             self.assertEqual(explicit, compact.config())
             self.assertEqual(explicit.scheme(), compact.config().scheme())
+
+    def test_default_quantize_paths_produce_identical_models_and_encodings(self):
+        from opennpu_quant import calibrate, quantize
+        from tests.library_fixtures import toy_model, feeds
+
+        model = toy_model()
+        original = model.SerializeToString(deterministic=True)
+        stats = calibrate(model, feeds)
+        expected = quantize(model, feeds)
+        for calibration in (feeds, stats):
+            for policy in ({"scheme": Scheme()}, {"config": QuantizationConfig()}):
+                with self.subTest(cached=calibration is stats, policy=policy):
+                    actual = quantize(model, calibration, **policy)
+                    self.assertEqual(expected.config, actual.config)
+                    self.assertEqual(expected.range_identity, actual.range_identity)
+                    self.assertEqual(
+                        expected.model.SerializeToString(deterministic=True),
+                        actual.model.SerializeToString(deterministic=True),
+                    )
+        self.assertEqual(original, model.SerializeToString(deterministic=True))
+
+    def test_explicit_old_policy_still_selects_minmax_symmetric_per_tensor(self):
+        from opennpu_quant import quantize
+        from tests.library_fixtures import toy_model, feeds
+
+        legacy = QuantizationConfig(
+            scope="basic",
+            activation_symmetric=True,
+            weight_granularity="per_tensor",
+            calibration=CalibrationConfig(),
+        )
+        compact = Scheme(
+            scope="basic",
+            activation_symmetric=True,
+            weight_granularity="per_tensor",
+            method="minmax",
+            percentile=None,
+        )
+        self.assertEqual(legacy, compact.config())
+        model = toy_model()
+        old = quantize(model, feeds, config=legacy)
+        equivalent = quantize(model, feeds, compact)
+        self.assertEqual(
+            old.model.SerializeToString(), equivalent.model.SerializeToString()
+        )
+        self.assertNotEqual(old.range_identity, quantize(model, feeds).range_identity)
 
     def test_runtime_has_no_maintainer_imports(self):
         root = Path(str(files("opennpu_quant")))

@@ -70,6 +70,7 @@ def create_session(model, config, *, profile=None, optimized=None):
 def environment(config):
     """Numerical profile for reuse; physical paths, UUIDs and host names are excluded."""
     import numpy, onnx
+    from .cpu_environment import cpu_environment
 
     ort = runtime(config)
     options = [
@@ -80,6 +81,7 @@ def environment(config):
         onnxruntime=ort.__version__,
         onnx=onnx.__version__,
         numpy=numpy.__version__,
+        cpu_numerics=cpu_environment(),
         providers=list(config.providers),
         provider_options=options,
         optimization=config.optimization,

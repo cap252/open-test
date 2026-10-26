@@ -140,15 +140,15 @@ Within this quantization path, Torch is needed only for AdaRound. ORT produces t
 
 ## 9. Policy objects and defaults
 
-| | `Scheme()` | `QuantizationConfig()` |
-|---|---|---|
-| Scope | `all` | `basic` |
-| Activations | Asymmetric | Symmetric |
-| Weights | Per-channel | Per-tensor |
-| Range selection | Percentile 99.99 | MinMax |
-| Scale policies | float / float | float / float |
+`Scheme()`, `QuantizationConfig()` and `quantize(model, feeds)` without a policy share these defaults:
 
-Calling `quantize(model, feeds)` without a policy uses `Scheme()`. Because the objects have different defaults, specify the policy explicitly for reproducible experiments.
+| Setting | Default |
+|---|---|
+| Scope | `all` |
+| Activations | Asymmetric |
+| Weights | Per-channel |
+| Range selection | Percentile 99.99 |
+| Activation / weight scales | float / float |
 
 Experiment YAML is converted to `Scheme` by `configuration.scheme_for()`. `Scheme.config()` produces a `QuantizationConfig`, whose `scheme()` method supplies the engine dictionary. These are representations of one policy along a conversion path. Passing a `QuantizationConfig` directly skips the compact-policy conversion.
 

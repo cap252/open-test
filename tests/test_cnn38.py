@@ -119,22 +119,22 @@ class Cnn38Tests(unittest.TestCase):
         self.assertIsNone(current["evaluation"]["limit"])
         self.assertEqual("S-640", ModelSpec.load("yolox").recipe["source"]["variant"])
 
-    def test_functional_mode_only_relaxes_numerical_parity(self):
+    def test_both_export_modes_record_numerical_differences(self):
         recipe = ModelSpec.load("resnet101").recipe
         a = {"logits": np.arange(6, dtype=np.float32)[None]}
         b = {"logits": a["logits"] + 0.2}
         self.assertFalse(
             validate_framework(a, b, recipe, "functional")["strict_passed"]
         )
-        with self.assertRaises((AssertionError, ValueError)):
-            validate_framework(a, b, recipe, "strict")
+        self.assertFalse(validate_framework(a, b, recipe, "strict")["strict_passed"])
         for value in [
             a["logits"].astype(np.float64),
             a["logits"][:, :3],
             np.full_like(a["logits"], np.nan),
         ]:
-            with self.assertRaises(ValueError):
-                validate_framework(a, {"logits": value}, recipe, "functional")
+            for mode in ("strict", "functional"):
+                with self.assertRaises(ValueError):
+                    validate_framework(a, {"logits": value}, recipe, mode)
 
     def test_adaround_functional_mode_records_only_finite_numerical_errors(self):
         from opennpu_quant.quant.config import AdaroundConfig
@@ -655,6 +655,170 @@ class Cnn38Tests(unittest.TestCase):
         self.assertEqual("Floor", actual.graph.node[1].op_type)
         feed = {"x": np.array([1.7], np.float32)}
         compare(outputs(model, [feed])[0], outputs(actual, [feed])[0])
+
+
+class FrameworkDiagnosticTests(unittest.TestCase):
+    def test_common_statistics_and_input_preservation(self):
+        recipe = ModelSpec.load("resnet18").recipe
+        a = np.array([[0, 1, 2, 3, 4, 5]], np.float32)
+        b = a.copy()
+        b[0, 0] = 0.25
+        before = (a.tobytes(), b.tobytes())
+        for mode in ("strict", "functional"):
+            result = validate_framework({"logits": a}, {"logits": b}, recipe, mode)
+            output = result["outputs"]["logits"]
+            self.assertEqual(0.25, output["max_abs"])
+            self.assertEqual(1, output["above_tolerance"])
+            self.assertEqual(1 / 6, output["above_tolerance_fraction"])
+            self.assertFalse(result["raw_numerical_passed"])
+            self.assertFalse(result["strict_passed"])
+            self.assertEqual("record_only", result["numerical_action"])
+            self.assertEqual("not_evaluated", result["quality"]["accuracy"])
+            json.dumps(result, allow_nan=False)
+        self.assertEqual(before, (a.tobytes(), b.tobytes()))
+
+    def test_zero_reference_and_signed_zero_are_reported(self):
+        recipe = dict(task="detection", export=dict(family="fixture"))
+        a = np.array([1, -0.0], np.float32)
+        b = np.zeros(2, np.float32)
+        result = validate_framework({"x": a}, {"x": b}, recipe, "strict")
+        self.assertEqual(1, result["outputs"]["x"]["zero_reference_mismatches"])
+        self.assertEqual(0, result["outputs"]["x"]["max_relative_nonzero"])
+        result = validate_framework({"x": a[1:]}, {"x": b[1:]}, recipe, "strict")
+        self.assertTrue(result["common_passed"])
+        self.assertFalse(result["outputs"]["x"]["bitwise_equal"])
+
+    def test_invalid_outputs_and_mode_remain_errors(self):
+        recipe = ModelSpec.load("resnet18").recipe
+        a = {"logits": np.ones((1, 5), np.float32)}
+        for mode in ("strict", "functional"):
+            for b in (
+                {},
+                {"wrong": a["logits"]},
+                {"logits": np.ones((1, 6), np.float32)},
+                {"logits": a["logits"].astype(np.float64)},
+                {"logits": np.full_like(a["logits"], np.inf)},
+                {"logits": np.full_like(a["logits"], np.nan)},
+            ):
+                with self.subTest(mode=mode, value=b), self.assertRaises(ValueError):
+                    validate_framework(a, b, recipe, mode)
+            with self.assertRaises(ValueError):
+                validate_framework({}, {}, recipe, mode)
+        with self.assertRaisesRegex(ValueError, "mode"):
+            validate_framework(a, a, recipe, "ignored")
+
+    def test_segmentation_quality_runs_even_when_allclose_passes(self):
+        recipe = ModelSpec.load("unet_resnet50_voc").recipe
+        a = np.array([[[[1.0]], [[1.000001]]]], np.float32)
+        b = a[:, ::-1].copy()
+        result = validate_framework({"logits": a}, {"logits": b}, recipe, "strict")
+        self.assertTrue(result["common_passed"])
+        self.assertTrue(result["raw_numerical_passed"])
+        self.assertFalse(result["effective_passed"])
+        self.assertEqual(1, result["quality"]["decisions"]["raw_argmax"]["different"])
+        self.assertEqual("differences", result["state"])
+
+    def test_nanodet_exception_is_restricted_to_verified_channels_and_model(self):
+        recipe = ModelSpec.load("nanodet_plus_m_320").recipe
+        a = np.zeros((1, 2, 112), np.float32)
+        b = a.copy()
+        b[..., 80:] = 0.00015
+        result = validate_framework(
+            {"predictions": a}, {"predictions": b}, recipe, "strict"
+        )
+        self.assertFalse(result["common_passed"])
+        self.assertTrue(result["raw_numerical_passed"])
+        self.assertEqual(64, result["outputs"]["predictions"]["above_tolerance"])
+        self.assertEqual(0.0, result["output_policies"]["regression_logits"]["rtol"])
+        self.assertIsNone(result["quality"]["decisions_passed"])
+        for index, value in ((0, 0.00015), (80, 0.00021)):
+            b = a.copy()
+            b[..., index] = value
+            result = validate_framework(
+                {"predictions": a}, {"predictions": b}, recipe, "strict"
+            )
+            self.assertFalse(result["raw_numerical_passed"])
+        other = copy.deepcopy(recipe)
+        other["name"] = "another_nanodet"
+        b[..., 80] = 0.00015
+        result = validate_framework(
+            {"predictions": a}, {"predictions": b}, other, "strict"
+        )
+        self.assertFalse(result["raw_numerical_passed"])
+        with self.assertRaisesRegex(ValueError, "80 probabilities"):
+            validate_framework(
+                {"predictions": a[..., :-1]},
+                {"predictions": a[..., :-1]},
+                recipe,
+                "strict",
+            )
+
+    def test_ssd_raw_and_selected_outputs_have_separate_verdicts(self):
+        recipe = ModelSpec.load("ssd_mobilenet_v2_320").recipe
+        a = {
+            "raw_detection_boxes": np.zeros((1, 2, 4), np.float32),
+            "raw_detection_scores": np.ones((1, 2, 91), np.float32),
+            "num_detections": np.array([2], np.float32),
+            "detection_classes": np.array([[1, 2]], np.float32),
+            "detection_anchor_indices": np.array([[3, 4]], np.float32),
+        }
+        b = {k: v.copy() for k, v in a.items()}
+        b["detection_anchor_indices"][0] = [4, 3]
+        result = validate_framework(a, b, recipe, "strict")
+        self.assertTrue(result["raw_numerical_passed"])
+        self.assertFalse(result["common_passed"])
+        self.assertFalse(result["quality"]["decisions_passed"])
+        self.assertFalse(result["effective_passed"])
+        del b["raw_detection_scores"]
+        del a["raw_detection_scores"]
+        with self.assertRaisesRegex(ValueError, "raw diagnostic"):
+            validate_framework(a, b, recipe, "strict")
+
+    def test_known_exceptions_do_not_replace_common_diagnostics(self):
+        cases = [
+            ("resnet18", "logits", np.arange(6, dtype=np.float32)[None], (0, 0), 5e-5),
+            (
+                "retinaface_mnet025_640",
+                "landmarks",
+                np.zeros((1, 1, 10), np.float32),
+                (0, 0, 0),
+                5e-5,
+            ),
+            (
+                "yolov5s",
+                "predictions",
+                np.zeros((1, 1, 85), np.float32),
+                (0, 0, 0),
+                0.001,
+            ),
+        ]
+        for model, name, a, index, delta in cases:
+            with self.subTest(model=model):
+                b = a.copy()
+                b[index] += delta
+                result = validate_framework(
+                    {name: a}, {name: b}, ModelSpec.load(model).recipe, "strict"
+                )
+                self.assertFalse(result["common_passed"])
+                self.assertTrue(result["raw_numerical_passed"])
+                self.assertEqual("differences", result["state"])
+
+    def test_diagnostic_is_visible_and_reports_quality_only_differences(self):
+        from opennpu_quant.export.parity import diagnostic_lines
+
+        recipe = ModelSpec.load("resnet18").recipe
+        a = np.array([[0, 1, 2, 3, 4, 4.000001]], np.float32)
+        b = a.copy()
+        b[0, -2:] = b[0, -2:][::-1]
+        check = validate_framework({"logits": a}, {"logits": b}, recipe, "strict")
+        lines = list(
+            diagnostic_lines("resnet18", dict(checks=[dict(framework_raw=check)]))
+        )
+        self.assertEqual(1, len(lines))
+        self.assertIn("above_tolerance=0/6", lines[0])
+        self.assertIn("decision checks passed=False", lines[0])
+        self.assertIn("Export continued", lines[0])
+        self.assertIn("model.json", lines[0])
 
 
 if __name__ == "__main__":

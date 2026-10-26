@@ -48,10 +48,18 @@ class TopKClassification:
             raise ValueError(
                 "One sample requires [1, classes] logits with sufficient classes"
             )
-        if (
-            not np.isfinite(logits).all()
-            or not 0 <= int(sample.target) < logits.shape[1]
-        ):
+        target = sample.target
+        try:
+            label = int(target)
+            # Retain lossless conversions, including integer labels read as text.
+            valid_target = not isinstance(target, (bool, np.bool_)) and (
+                isinstance(target, str) or target == label
+            )
+            if not valid_target or not 0 <= label < logits.shape[1]:
+                raise ValueError("Invalid classification target")
+        except (TypeError, ValueError, OverflowError):
+            raise ValueError("Invalid classification target") from None
+        if not np.isfinite(logits).all():
             raise ValueError("Invalid logits or target")
         # Reverse both the input and sorted indices so ties keep the lowest class
         # first, without negating integers or losing precision through float casts.
@@ -61,11 +69,11 @@ class TopKClassification:
             reversed_order = np.argsort(logits[0, ::-1], kind="stable")
             prediction = logits.shape[1] - 1 - reversed_order[::-1]
         for k in self.topk:
-            self.correct[k] += int(int(sample.target) in prediction[:k])
+            self.correct[k] += int(label in prediction[:k])
         self.count += 1
         self.prediction = dict(
             image_id=sample.sample_id,
-            label=int(sample.target),
+            label=label,
             top5=prediction[:5].tolist(),
             top5_logits=logits[0, prediction[:5]].tolist(),
         )

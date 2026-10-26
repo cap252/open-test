@@ -3,6 +3,24 @@ from pathlib import Path
 from .._io import read_json
 
 
+# Load only this package into the selected interpreter. Adding the enclosing
+# site-packages to PYTHONPATH would also replace the worker's dependencies.
+_WORKER_BOOTSTRAP = """
+import importlib.util, runpy, sys
+from pathlib import Path
+package = Path(sys.argv.pop(1))
+spec = importlib.util.spec_from_file_location(
+    "opennpu_quant", package / "__init__.py",
+    submodule_search_locations=[str(package)],
+)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+sys.argv[0] = "opennpu_quant.export.worker"
+runpy.run_module(sys.argv[0], run_name="__main__")
+"""
+
+
 def export(
     model, paths, *, weights=None, source=None, python=None, validation="strict"
 ):
@@ -16,10 +34,19 @@ def export(
         )
     if validation not in ("strict", "functional"):
         raise ValueError("Unknown export validation mode")
+    interpreter = (
+        [
+            python,
+            "-I",
+            "-c",
+            _WORKER_BOOTSTRAP,
+            str(Path(__file__).resolve().parents[1]),
+        ]
+        if python
+        else [sys.executable, "-m", "opennpu_quant.export.worker"]
+    )
     command = [
-        python or sys.executable,
-        "-m",
-        "opennpu_quant.export.worker",
+        *interpreter,
         model,
         "--destination",
         str(paths.models / model),
@@ -54,12 +81,6 @@ def export(
     )
     cache = paths.cache / "export"
     cache.mkdir(parents=True, exist_ok=True)
-    if python:
-        # Make this installed package available to an isolated upstream interpreter.
-        package_root = str(Path(__file__).resolve().parents[2])
-        env["PYTHONPATH"] = os.pathsep.join(
-            filter(None, [package_root, env.get("PYTHONPATH")])
-        )
     env.update(
         OPENNPU_EXPORT_CACHE=str(cache.resolve()),
         MPLCONFIGDIR=str(cache / "matplotlib"),

@@ -1,6 +1,9 @@
 """Release-compatible export cuts and evaluation-identical SSD validation inputs."""
 
 import copy
+import os
+import subprocess
+import venv
 from pathlib import Path
 import tempfile
 import unittest
@@ -82,6 +85,85 @@ def head_graph(model, count=None):
 
 
 class ExportBoundaryTests(unittest.TestCase):
+    def test_separate_interpreter_uses_only_callers_package_not_its_dependencies(self):
+        from opennpu_quant.export import launcher
+        from opennpu_quant.paths import Paths
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "local.yaml").write_text("{}\n")
+            child = root / "child"
+            venv.EnvBuilder(with_pip=False, symlinks=True).create(child)
+            executable = child / "bin/python"
+            site = Path(
+                subprocess.check_output(
+                    [
+                        str(executable),
+                        "-I",
+                        "-c",
+                        "import sysconfig; print(sysconfig.get_path('purelib'))",
+                    ],
+                    text=True,
+                ).strip()
+            )
+            (site / "worker_dependency.py").write_text("value = 'child'\n")
+            foreign = site / "opennpu_quant"
+            foreign.mkdir()
+            (foreign / "__init__.py").write_text(
+                "raise RuntimeError('wrong package')\n"
+            )
+            for layout in ("src", "site-packages"):
+                with self.subTest(layout=layout):
+                    parent = root / layout
+                    package = parent / "opennpu_quant"
+                    (package / "export").mkdir(parents=True)
+                    (parent / "worker_dependency.py").write_text("value = 'parent'\n")
+                    (package / "__init__.py").write_text("origin = 'caller'\n")
+                    (package / "reference.json").write_text('{"resource": "caller"}')
+                    (package / "export/__init__.py").write_text("")
+                    (package / "export/worker.py").write_text(
+                        "import argparse, json, sys, worker_dependency, opennpu_quant\n"
+                        "from pathlib import Path\n"
+                        "from importlib.resources import files\n"
+                        "p=argparse.ArgumentParser(); p.add_argument('model'); p.add_argument('--destination')\n"
+                        "a,_=p.parse_known_args(); d=Path(a.destination); d.mkdir(parents=True)\n"
+                        "result=dict(model=a.model, dependency=worker_dependency.value, "
+                        "origin=opennpu_quant.origin, resource=json.loads(files(opennpu_quant).joinpath('reference.json').read_text()), "
+                        "executable=sys.executable, sys_path=sys.path)\n"
+                        "(d/'model.json').write_text(json.dumps(result))\n"
+                    )
+                    for polluted in (False, True):
+                        with self.subTest(polluted_environment=polluted):
+                            paths = Paths.resolve(
+                                home=root / f"{layout}-{polluted}-output",
+                                local=root / "local.yaml",
+                            )
+                            with (
+                                patch.object(
+                                    launcher,
+                                    "__file__",
+                                    str(package / "export/launcher.py"),
+                                ),
+                                patch.dict(os.environ),
+                            ):
+                                os.environ.pop("PYTHONPATH", None)
+                                os.environ.pop("PYTHONHOME", None)
+                                if polluted:
+                                    os.environ.update(
+                                        PYTHONPATH=str(parent),
+                                        PYTHONHOME=str(root / "invalid-python-home"),
+                                    )
+                                result = launcher.export(
+                                    "resnet18", paths, python=str(executable)
+                                )
+                            self.assertEqual("child", result["dependency"])
+                            self.assertEqual("caller", result["origin"])
+                            self.assertEqual({"resource": "caller"}, result["resource"])
+                            self.assertEqual("resnet18", result["model"])
+                            self.assertEqual(str(executable), result["executable"])
+                            self.assertNotIn(str(parent), result["sys_path"])
+                            self.assertNotIn("", result["sys_path"])
+
     def test_packaged_graph_roles_match_the_release_selection(self):
         entries = catalog()["entries"]
         for name in (
@@ -185,7 +267,9 @@ class ExportBoundaryTests(unittest.TestCase):
             for file in recipe["graphs"].values():
                 (destination / file).write_bytes(b"fixture")
             return dict(
-                network_input_map={"images": "images"}, network_outputs=["scores"]
+                network_input_map={"images": "images"},
+                network_outputs=["scores"],
+                checks=[],
             )
 
         with tempfile.TemporaryDirectory() as temp:
@@ -234,7 +318,11 @@ class ExportBoundaryTests(unittest.TestCase):
         def finish(raw, recipe, feeds, references, destination, **kwargs):
             for file in recipe["graphs"].values():
                 (destination / file).write_bytes(b"fixture")
-            return dict(network_input_map={"images": "images"}, network_outputs=["raw"])
+            return dict(
+                network_input_map={"images": "images"},
+                network_outputs=["raw"],
+                checks=[],
+            )
 
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

@@ -61,7 +61,7 @@ def quantize(
         Compact policy; omitted scheme and config use Scheme() defaults.
     config : QuantizationConfig, optional
         Explicit policy, mutually exclusive with scheme. QuantizationConfig()
-        has different defaults from Scheme(); neither is changed by this API.
+        has the same defaults as Scheme().
     ort : OrtConfig, optional
         CPU by default; ORT_DISABLE_ALL is required.
     reconstruction_feeds : callable, optional

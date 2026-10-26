@@ -6,7 +6,7 @@ from ._io import object_hash, sha256
 
 ROOT = Path(__file__).parent
 # Session creation and output copies. Caches of values computed by ORT hash them.
-ORT_CODE = ("ort/session.py", "ort/fetch.py")
+ORT_CODE = ("ort/session.py", "ort/fetch.py", "ort/cpu_environment.py")
 
 
 def code_identity():

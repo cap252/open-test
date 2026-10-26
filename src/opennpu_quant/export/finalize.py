@@ -5,6 +5,7 @@ from ..ort.session import create_session
 from ..ort.config import OrtConfig
 from ..ort.fetch import run_tensors
 from .contract import validate_parts
+from .parity import framework_compare as framework_compare, validate_framework
 
 
 def compare(expected, actual):
@@ -35,12 +36,14 @@ def outputs(model, feeds):
 def finalize(raw, recipe, feeds, references, destination, *, validation="strict"):
     if validation not in ("strict", "functional"):
         raise ValueError("Unknown export validation mode")
+    if not feeds or len(feeds) != len(references):
+        raise ValueError("Export requires one framework reference per input fixture")
     model = onnx.load(raw)
     onnx.checker.check_model(model, full_check=True)
     raw_values = outputs(model, feeds)
     checks = [
         dict(framework_raw=validate_framework(a, b, recipe, validation))
-        for a, b in zip(references, raw_values)
+        for a, b in zip(references, raw_values, strict=True)
     ]
     transformations = {}
     if recipe["export"].get("fold_constant_floors"):
@@ -76,7 +79,7 @@ def finalize(raw, recipe, feeds, references, destination, *, validation="strict"
             raise ValueError("onnxsim validation failed")
     model = onnx.shape_inference.infer_shapes(model, check_type=True)
     values = outputs(model, feeds)
-    for check, a, b in zip(checks, raw_values, values):
+    for check, a, b in zip(checks, raw_values, values, strict=True):
         check["raw_final"] = compare(a, b)
     available = {
         v.name
@@ -189,119 +192,21 @@ def finalize(raw, recipe, feeds, references, destination, *, validation="strict"
         framework_parity_passed=all(
             c["framework_raw"].get("strict_passed", False) for c in checks
         ),
+        framework_numerical_action="record_only",
+        framework_raw_numerical_passed=all(
+            c["framework_raw"]["raw_numerical_passed"] for c in checks
+        ),
+        framework_diagnostics_state=(
+            "agreement"
+            if all(c["framework_raw"]["state"] == "agreement" for c in checks)
+            else "differences"
+        ),
         transformations=transformations,
         release_structure=structure,
+        execution_scope=dict(
+            framework="cpu",
+            network="cpu",
+            host="cpu",
+            gpu_network="not_checked",
+        ),
     )
-
-
-def framework_compare(expected, actual, recipe):
-    """Frozen, previously evaluated framework policies; raw/final and partition stay strict."""
-    policy = recipe["export"].get("framework_parity", {})
-    strict_errors = None
-    try:
-        strict_errors = compare(expected, actual)
-    except AssertionError:
-        pass
-    if recipe["task"] == "classification":
-        if set(expected) != {"logits"} or set(actual) != {"logits"}:
-            raise ValueError("Classification parity requires logits")
-        a, b = expected["logits"], actual["logits"]
-        if a.ndim != 2 or a.shape[-1] < 5:
-            raise ValueError("Classification parity requires at least five logits")
-        if not np.array_equal(
-            np.argsort(a, axis=-1)[..., -5:], np.argsort(b, axis=-1)[..., -5:]
-        ):
-            raise ValueError("Framework Top5 order differs")
-    if strict_errors is not None:
-        return dict(strict_passed=True, errors=strict_errors, policy=policy)
-    if set(expected) != set(actual):
-        raise ValueError("Framework output names differ")
-    errors = {}
-    for name, a in expected.items():
-        b = actual[name]
-        if (
-            a.dtype != b.dtype
-            or a.shape != b.shape
-            or not np.isfinite(a).all()
-            or not np.isfinite(b).all()
-        ):
-            raise ValueError("Invalid framework outputs")
-        errors[name] = float(
-            np.abs(a.astype(np.float64) - b.astype(np.float64)).max(initial=0)
-        )
-    task = recipe["task"]
-    if task in ("classification", "segmentation") and set(expected) == {"logits"}:
-        a, b = expected["logits"], actual["logits"]
-        bound = policy.get("logits_absolute_bound", 1e-5)
-        if errors["logits"] > bound:
-            raise ValueError(
-                f"Framework logits exceed frozen absolute bound {bound}: {errors}"
-            )
-        if task == "segmentation" and (
-            float((a.argmax(1) != b.argmax(1)).mean())
-            > policy.get("label_disagreement_fraction_limit", 0.0)
-        ):
-            raise ValueError(
-                "Framework segmentation labels exceed frozen disagreement limit"
-            )
-        np.testing.assert_allclose(a, b, atol=bound, rtol=1e-4)
-    elif task == "face":
-        for name, a in expected.items():
-            b = actual[name]
-            if np.allclose(a, b, atol=1e-5, rtol=1e-4):
-                continue
-            bound = policy.get("output_absolute_bounds", {}).get(name, 1e-5)
-            if errors[name] > bound:
-                raise ValueError("Framework face output exceeds frozen bound: " + name)
-            np.testing.assert_allclose(a, b, atol=bound, rtol=1e-4)
-    elif recipe["export"]["family"] == "yolov5":
-        a, b = expected["predictions"], actual["predictions"]
-        np.testing.assert_allclose(a[..., 4:], b[..., 4:], atol=1e-5, rtol=1e-4)
-        if not np.allclose(a[..., :4], b[..., :4], atol=1e-5, rtol=1e-4):
-            if float(np.abs(a[..., :4] - b[..., :4]).max()) > policy.get(
-                "decoded_xywh_absolute_bound", 1e-5
-            ):
-                raise ValueError("YOLO coordinate bound exceeded")
-            np.testing.assert_allclose(
-                a[..., :4],
-                b[..., :4],
-                atol=policy.get("decoded_xywh_absolute_bound", 1e-5),
-                rtol=1e-4,
-            )
-    else:
-        compare(expected, actual)
-    return dict(
-        strict_passed=False,
-        effective_passed=True,
-        errors=errors,
-        policy=policy,
-        note="Uses the frozen original framework exception; no new tolerance relaxation",
-    )
-
-
-def validate_framework(expected, actual, recipe, mode):
-    """Functional mode records numerical failures; structural failures always stop export."""
-    if mode == "strict":
-        return framework_compare(expected, actual, recipe)
-    if set(expected) != set(actual):
-        raise ValueError("Framework output names changed")
-    errors = {}
-    for name, value in expected.items():
-        other = actual[name]
-        if value.shape != other.shape or value.dtype != other.dtype:
-            raise ValueError("Framework output shape/dtype changed: " + name)
-        if not np.isfinite(value).all() or not np.isfinite(other).all():
-            raise ValueError("Nonfinite framework output: " + name)
-        errors[name] = float(
-            np.abs(value.astype(np.float64) - other.astype(np.float64)).max(initial=0)
-        )
-    try:
-        result = framework_compare(expected, actual, recipe)
-    except (AssertionError, ValueError) as error:
-        return dict(
-            strict_passed=False,
-            functional_passed=True,
-            errors=errors,
-            diagnostic=str(error),
-        )
-    return dict(result, functional_passed=True)

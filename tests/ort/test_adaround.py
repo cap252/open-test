@@ -24,6 +24,8 @@ from tests.ort.test_pot_quantization import shared_graph, shared_feeds
 
 SMALL = AdaroundConfig(steps=4, batch_size=2, window_samples=2, window_steps=2)
 QCONFIG = QuantizationConfig(
+    calibration=CalibrationConfig(),
+    activation_symmetric=True,
     scope="all",
     weight_granularity="per_channel",
     activation_scale_policy="pot_ceil",
@@ -284,6 +286,36 @@ class AdaroundTests(unittest.TestCase):
             model, feeds, config=replace(QCONFIG, adaround=SMALL), ort=OrtConfig.cpu()
         )
         self.assertEqual(a.model.SerializeToString(), b.model.SerializeToString())
+
+    def test_conv_with_empty_optional_bias_name(self):
+        rng = np.random.default_rng(0)
+        model = h.make_model(
+            h.make_graph(
+                [h.make_node("Conv", ["x", "w", ""], ["y"], name="conv")],
+                "empty_bias",
+                [h.make_tensor_value_info("x", 1, [1, 2, 4, 4])],
+                [h.make_tensor_value_info("y", 1, [1, 3, 4, 4])],
+                [n.from_array(rng.normal(size=(3, 2, 1, 1)).astype(np.float32), "w")],
+            ),
+            opset_imports=[h.make_opsetid("", 18)],
+            ir_version=10,
+        )
+        data = [rng.normal(size=(1, 2, 4, 4)).astype(np.float32) for _ in range(4)]
+
+        def inputs():
+            return iter([{"x": x} for x in data])
+
+        rtn = quantize(model, inputs, config=QCONFIG, ort=OrtConfig.cpu())
+        optimized = apply_adaround(
+            model, rtn, inputs, config=SMALL, ort=OrtConfig.cpu()
+        )
+        self.assertEqual(rtn.range_identity, optimized.range_identity)
+
+    def test_cuda_request_without_cuda_torch_fails_before_any_work(self):
+        cuda = replace(SMALL, device="cuda")
+        with patch("torch.cuda.is_available", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "CUDA Torch is unavailable"):
+                apply_adaround(None, None, None, config=cuda, ort=OrtConfig.cpu())
 
 
 @unittest.skipUnless(

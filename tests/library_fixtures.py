@@ -67,3 +67,19 @@ def quantization_matrix():
             CalibrationConfig.entropy(),
         )
     )
+
+
+def small_config():
+    from opennpu_quant.configuration import load_config
+
+    config = load_config("core10")
+    config["name"] = "small"
+    config["models"] = ["resnet18", "yolov5s"]
+    config["conditions"] = {
+        key: row for key, row in config["conditions"].items() if not row.get("adaround")
+    }
+    config["calibration"]["samples"] = dict.fromkeys(
+        config["calibration"]["samples"], 8
+    )
+    config["evaluation"]["limit"] = 32
+    return config

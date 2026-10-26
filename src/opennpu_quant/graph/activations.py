@@ -1124,4 +1124,10 @@ class Recognizer:
 
 
 def recognize(model, gate_provenance=None):
+    """Find activation regions whose internal edges must not receive Q/DQ.
+
+    Returns dict(regions, counts, excluded_gates, ambiguous, conflicts, nested_graphs,
+    nested_audits, passed). passed is False for an ambiguous pattern, conflicting
+    regions or a nested graph, and quantization then refuses the model.
+    """
     return Recognizer(model, gate_provenance).run()

@@ -1,0 +1,42 @@
+name: mobilefacenet_relu_foamliu
+title: MobileFaceNet ReLU (foamliu)
+task: face_verification
+dataset: lfw_mobilefacenet
+metric: verification_accuracy
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - 112
+  - 112
+  layout: NCHW
+graphs:
+  network: network.onnx
+preprocess:
+  kind: aligned_face
+  size: 112
+  mean:
+  - 0.485
+  - 0.456
+  - 0.406
+  std:
+  - 0.229
+  - 0.224
+  - 0.225
+  divide: 255
+decode:
+  kind: face_verification
+  output: embedding
+  dimensions: 128
+source:
+  url: https://raw.githubusercontent.com/foamliu/MobileFaceNet/a6cc9032a659b615f477833e1a70b5e7931bcccc/weights/mobilefacenet.pt
+  sha256: 90a00ba1d8b0b688af3deb731ed53dca582e6106805d1bc3cfdef55f570493f4
+  variant: MS-Celeb-1M/ReLU6/128D
+  repo: https://github.com/foamliu/MobileFaceNet
+  commit: a6cc9032a659b615f477833e1a70b5e7931bcccc
+export:
+  family: mobilefacenet_relu
+  opset: 17
+  outputs:
+  - embedding

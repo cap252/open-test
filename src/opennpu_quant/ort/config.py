@@ -1,5 +1,7 @@
 from dataclasses import asdict, dataclass
 
+DEFAULT_GPU_MEMORY_LIMIT = 6 * 1024**3
+
 
 @dataclass(frozen=True)
 class OrtConfig:
@@ -59,8 +61,9 @@ class OrtConfig:
             raise ValueError("Only CPU and CUDA providers are supported")
         if self.provider_options and len(self.providers) != len(self.provider_options):
             raise ValueError("provider_options must correspond to providers")
-        if min(self.intra_op_threads, self.inter_op_threads) < 0:
-            raise ValueError("Threads must be nonnegative")
+        for key in ("intra_op_threads", "inter_op_threads"):
+            if type(getattr(self, key)) is not int or getattr(self, key) < 0:
+                raise ValueError(f"{key} must be an integer >= 0")
         if type(self.profile_samples) is not int or self.profile_samples not in (0, 1):
             raise ValueError(
                 "The bounded execution profile supports zero or one sample"
@@ -80,11 +83,11 @@ class OrtConfig:
         return cls(**kwargs)
 
     @classmethod
-    def cuda(cls, device=0, *, memory_limit=6 * 1024**3, **kwargs):
-        if type(device) is not int or device < 0 or memory_limit <= 0:
-            raise ValueError(
-                "CUDA device and memory limit must be nonnegative/positive"
-            )
+    def cuda(cls, device=0, *, memory_limit=DEFAULT_GPU_MEMORY_LIMIT, **kwargs):
+        if type(device) is not int or device < 0:
+            raise ValueError("CUDA device must be an integer >= 0")
+        if type(memory_limit) is not int or memory_limit <= 0:
+            raise ValueError("CUDA memory_limit must be an integer > 0")
         options = {
             "device_id": str(device),
             "use_tf32": "0",

@@ -5,12 +5,17 @@ import io
 import json
 import math
 from pathlib import Path
-from ._io import atomic_json, read_json, object_hash
+from ._io import atomic_json, read_json
 from ._identity import compare_identity_evidence
+from .data.lfw_protocol import reject_partial_result
 
 SCHEMA_VERSION = 1
 SUCCESS = {"completed", "evaluated", "reused"}
+REPORT_FORMATS = ("csv", "tsv", "json", "md")
+DEFAULT_REPORT_FORMATS = ("csv", "json")
 METRIC_FIELDS = "run_id model model_name condition state metric value unit value_pct primary".split()
+DIAGNOSTIC_FIELDS = """run_id model condition state failure_reason metric value unit
+samples expected_samples repeat_bitwise original_accuracy_state""".split()
 
 RAW_FIELDS = """model task dataset metric fp32_accuracy int8_accuracy recovery_percent
 scheme percentile model_source_url model_source_revision top5_percent AP50_percent AP75_percent
@@ -57,6 +62,35 @@ def percent(metric):
     if metric.get("unit") == "percent":
         return value
     return None  # Unknown units and e.g. dB must not silently become percentages.
+
+
+def recovery_percent(metric, baseline, *, is_baseline=False):
+    """Compute recovery for an already matched pair of measurements."""
+    if not metric or not baseline:
+        return None
+    for item in (metric, baseline):
+        value = item.get("value")
+        if value is None:
+            return None
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            raise ValueError("Nonfinite or nonnumeric metric")
+    unit, base_unit = metric.get("unit"), baseline.get("unit")
+    if unit not in {"fraction", "percent"} or base_unit not in {"fraction", "percent"}:
+        return None
+    value, denominator = metric["value"], baseline["value"]
+    if unit != base_unit:
+        value = value / 100 if unit == "percent" else value
+        denominator = denominator / 100 if base_unit == "percent" else denominator
+    if denominator <= 0:
+        return None
+    if is_baseline:
+        return 100.0
+    # Preserve the reference operation order before display-unit conversion.
+    return 100 * value / denominator
 
 
 def normalize_scheme(value, adaround=None):
@@ -195,9 +229,60 @@ def raw_export_row(row):
     return {field: values.get(field) for field in RAW_FIELDS}
 
 
+def measurement_reason(record):
+    """Why a saved record cannot supply a measured value in any report."""
+    if record.get("reference"):
+        return "not_this_execution"
+    if record.get("state") not in SUCCESS:
+        reason = record.get("failure_reason")
+        return (
+            reason
+            if isinstance(reason, str) and reason
+            else "state:" + str(record.get("state"))
+        )
+    if record.get("evidence", {}).get("result_hash_verified") is not True:
+        return "unverified_result"
+    return None
+
+
+def full_evaluation(record):
+    """Full dataset coverage, shared by table grouping and cohort averages."""
+    return bool(
+        record.get("full_evaluation") is True
+        and record.get("complete") is True
+        and type(record.get("samples")) is int
+        and type(record.get("expected_samples")) is int
+        and record["samples"] > 0
+        and record["samples"] == record["expected_samples"]
+    )
+
+
+def _baseline_scope(record):
+    return (
+        full_evaluation(record),
+        *(
+            record.get(key)
+            for key in (
+                "expected_samples",
+                "sample_unit",
+                "view_count",
+                "evaluation_profile",
+                "origin",
+            )
+        ),
+    )
+
+
 def tables(records):
     lookup = {}
     for r in records:
+        reject_partial_result(r)
+        if r.get("origin") == "historical_research":
+            raise ValueError(
+                "Unsupported record origin 'historical_research' for "
+                f"run '{r.get('run_id')}', model '{r.get('model')}', "
+                f"condition '{r.get('condition')}'; historical records are no longer supported."
+            )
         key = (r["run_id"], r["model"], r["condition"])
         if key in lookup:
             raise ValueError("Duplicate measurement record: " + str(key))
@@ -205,7 +290,8 @@ def tables(records):
         metric_values({k: m["value"] for k, m in r.get("metrics", {}).items()})
     rows, details = [], []
     for r in records:
-        ok = r["state"] in SUCCESS
+        reason = measurement_reason(r)
+        ok = reason is None
         metric = r["primary_metric"]
         measured = r.get("metrics", {}) if ok else {}
         value = percent(measured.get(metric))
@@ -222,22 +308,27 @@ def tables(records):
                 dataset=row.get("dataset"),
                 split=row.get("split"),
             )
-            if row.get("origin") == "historical_research":
-                # Older evaluation_identity did not cover the execution protocol.
-                identity.update(
-                    code_identity=evidence.get("source_code_identity"),
-                    environment_identity=object_hash(evidence["runtime"])
-                    if evidence.get("runtime")
-                    else None,
-                )
             return identity
 
         pair_state, pair_reason = compare_identity_evidence(
             pairing_identity(r), pairing_identity(b or {})
         )
+        base_ok = b is not None and measurement_reason(b) is None
         if b and b.get("quantization") is not None:
             pair_state, pair_reason = "mismatch", "mismatch:baseline_is_not_FP32"
-        matched = bool(ok and b and b["state"] in SUCCESS and pair_state == "passed")
+        elif not ok:
+            pair_state, pair_reason = "insufficient_evidence", "measurement:" + reason
+        elif b is not None and not base_ok:
+            pair_state, pair_reason = (
+                "insufficient_evidence",
+                "baseline:" + measurement_reason(b),
+            )
+        elif b is not None and _baseline_scope(r) != _baseline_scope(b):
+            pair_state, pair_reason = (
+                "mismatch",
+                "incompatible_baseline_scope_or_profile",
+            )
+        matched = bool(ok and base_ok and pair_state == "passed")
         if not matched and pair_state == "passed":
             pair_state, pair_reason = (
                 "insufficient_evidence",
@@ -247,13 +338,16 @@ def tables(records):
             not ok
             and b
             and b.get("quantization") is None
-            and b["state"] in SUCCESS
+            and base_ok
             and b["primary_metric"] == metric
             and b.get("dataset") == r.get("dataset")
             and b.get("split") == r.get("split")
         )
         base_metrics = b.get("metrics", {}) if matched or pending_base else {}
         fp = percent(base_metrics.get(metric))
+        if matched and fp == 0:
+            matched = False
+            pair_state, pair_reason = "unmatched", "zero_fp32_denominator"
         q = r.get("quantization") or {}
         source = r.get("model_source") or {}
         row = dict(
@@ -263,19 +357,23 @@ def tables(records):
             value_pct=value,
             fp32_pct=fp,
             delta_pp=value - fp if value is not None and fp is not None else None,
-            recovery_pct=100 * value / fp
-            if value is not None and fp is not None and fp > 0
+            recovery_pct=recovery_percent(
+                measured.get(metric), base_metrics.get(metric), is_baseline=r is b
+            )
+            if matched
             else None,
             samples=r.get("samples"),
             expected_samples=r.get("expected_samples"),
             complete=bool(ok and r.get("complete")),
+            full_evaluation=bool(ok and full_evaluation(r)),
+            measurement_reason=reason,
             reference=bool(r.get("reference", False)),
             percentile=q.get("calibration", {}).get("percentile"),
             activation_scale=q.get("activation_scale"),
             weight_scale=q.get("weight_scale"),
             run_id=r["run_id"],
             model_name=r.get("model_name", r["model"]),
-            state=r["state"],
+            state=r["state"] if ok or r["state"] not in SUCCESS else "unverified",
             origin=r["origin"],
             dataset=r.get("dataset"),
             task=r.get("task") or r.get("model_metadata", {}).get("task"),
@@ -303,17 +401,12 @@ def tables(records):
             pairing_status=pair_state,
             pairing_reason=pair_reason,
         )
-        if "comparison" in r:
-            comparison = r["comparison"]
-            row.update(
-                condition_family=comparison["family"],
-                activation_recalibration=comparison["activation_recalibration"],
-                evaluation_batch_size=comparison["evaluation_batch_size"],
-                optimization=comparison["optimization"],
-                selection_basis=comparison["selection_basis"],
-            )
-            if comparison["activation_recalibration"]:
-                row["scheme"] += "/activation_recalibration"
+        failure = r.get("failure_reason")
+        failure_details = r.get(
+            "failure_details", failure if not isinstance(failure, str) else None
+        )
+        if failure_details is not None:
+            row["failure_details"] = failure_details
         rows.append(row)
         for key, item in measured.items():
             details.append(
@@ -359,9 +452,9 @@ def _text(path, text, encoding):
     temporary.replace(path)
 
 
-def normalize_formats(formats, *, allowed=("csv", "tsv", "json")):
+def normalize_formats(formats, *, allowed=REPORT_FORMATS):
     if formats is None:
-        return frozenset(allowed)
+        return frozenset(DEFAULT_REPORT_FORMATS) & frozenset(allowed)
     values = formats.split(",") if isinstance(formats, str) else list(formats)
     if not values or any(
         not isinstance(v, str) or v.strip() not in allowed for v in values
@@ -383,6 +476,9 @@ def report_policy(value):
         "detection",
         "face",
         "segmentation",
+        "keypoints",
+        "instance_segmentation",
+        "face_verification",
     }:
         raise ValueError("Invalid report primary_metric mapping")
     if any(not isinstance(v, str) or not v.strip() for v in primary.values()):
@@ -398,34 +494,228 @@ def report_policy(value):
     return dict(primary_metric=dict(primary), target_mean_recovery=target)
 
 
-def export_records(records, directory, *, metadata=None, formats=None):
-    """Write selected raw records and tables; omitted formats preserves all outputs."""
+def diagnostic_rows(records):
+    """Unaccepted measurements for inspection, never used for accuracy or recovery."""
+    rows = []
+    for record in records:
+        diagnostic = record.get("diagnostic_measurement")
+        if not diagnostic:
+            continue
+        if (
+            record.get("state") != "fail"
+            or record.get("evidence", {}).get("result_hash_verified") is not True
+            or diagnostic.get("repeat_bitwise") is not False
+        ):
+            raise ValueError("Diagnostic measurement requires a verified failed result")
+        metrics = diagnostic.get("metrics", {})
+        values = metric_values(
+            {name: metric["value"] for name, metric in metrics.items()},
+            {name: metric["unit"] for name, metric in metrics.items()},
+        )
+        for name, metric in values.items():
+            rows.append(
+                dict(
+                    **{
+                        key: record.get(key)
+                        for key in (
+                            "run_id",
+                            "model",
+                            "condition",
+                            "state",
+                            "failure_reason",
+                            "samples",
+                            "expected_samples",
+                        )
+                    },
+                    metric=name,
+                    value=metric["value"],
+                    unit=metric["unit"],
+                    repeat_bitwise=False,
+                    original_accuracy_state=diagnostic.get("original_accuracy", {}).get(
+                        "state"
+                    ),
+                )
+            )
+    return rows
+
+
+def export_records(
+    records,
+    directory,
+    *,
+    metadata=None,
+    formats=None,
+    table_profile=None,
+    summary=None,
+    _refresh_existing=False,
+):
+    """Write requested reports, optionally refreshing existing run reports too."""
     selected = normalize_formats(formats)
-    rows, metrics = tables(records)
-    raw_rows = [raw_export_row(row) for row in rows]
     directory = Path(directory)
+
+    def wanted(name, requested):
+        return requested or (_refresh_existing and (directory / name).is_file())
+
+    raw_files = ["raw_data.metadata.json"] + [
+        stem + "." + suffix
+        for stem in ("raw_data", "raw_data.partial")
+        for suffix in ("csv", "tsv")
+    ]
+    compatible = None
+    if table_profile or any(wanted(name, False) for name in raw_files):
+        from .raw_report import build_report
+
+        compatible = build_report(records, profile=table_profile or "opennpu_raw")
+    rows, metrics = tables(records)
+    diagnostics = diagnostic_rows(records)
+    if summary is None:
+        summary = summarize(
+            records, rows=rows, policy=(metadata or {}).get("report_policy")
+        )
+    raw_rows = [raw_export_row(row) for row in rows]
     directory.mkdir(parents=True, exist_ok=True)
+    diagnostic_file = "diagnostics.csv"
+    if wanted(
+        diagnostic_file,
+        "csv" in selected
+        and (bool(diagnostics) or (directory / diagnostic_file).is_file()),
+    ):
+        _text(
+            directory / diagnostic_file,
+            table_text(diagnostics, DIAGNOSTIC_FIELDS, delimiter=","),
+            "utf-8-sig",
+        )
     for name, values, fields in (
-        ("accuracy", raw_rows, RAW_FIELDS),
         ("results", raw_rows, RAW_FIELDS),
         ("metrics", metrics, METRIC_FIELDS),
     ):
-        if "csv" in selected:
-            _text(
-                directory / (name + ".csv"),
-                table_text(values, fields, delimiter=","),
-                "utf-8-sig",
-            )
-        if "tsv" in selected:
-            _text(directory / (name + ".tsv"), table_text(values, fields), "utf-8")
-    if "json" in selected:
+        for suffix, delimiter, encoding in (
+            ("csv", ",", "utf-8-sig"),
+            ("tsv", "\t", "utf-8"),
+        ):
+            filename = name + "." + suffix
+            requested = suffix in selected and (name == "metrics" or not table_profile)
+            if wanted(filename, requested):
+                _text(
+                    directory / filename,
+                    table_text(values, fields, delimiter=delimiter),
+                    encoding,
+                )
+    if wanted("records.json", "json" in selected):
         atomic_json(
             directory / "records.json",
             dict(
                 schema_version=SCHEMA_VERSION, metadata=metadata or {}, records=records
             ),
         )
+    if wanted("summary.json", "json" in selected):
+        atomic_json(directory / "summary.json", summary)
+    if wanted("summary.md", "md" in selected):
+        _text(
+            directory / "summary.md",
+            _markdown(
+                summary["rows"],
+                summary["mean_recovery"],
+                summary["report_policy"]["target_mean_recovery"],
+                summary["target_met"],
+            ),
+            "utf-8",
+        )
+    if compatible is not None:
+        from .raw_report import _write_report
+
+        _write_report(
+            compatible,
+            directory,
+            source=metadata,
+            selected=selected if table_profile else frozenset(),
+            refresh_existing=_refresh_existing,
+        )
     return rows
+
+
+def summarize(records, *, rows=None, policy=None):
+    """Summarize the selected cohort identically for generated and replayed models."""
+    rows = tables(records)[0] if rows is None else rows
+    policy = report_policy(policy)
+    config = dict(
+        models=list(dict.fromkeys(r["model"] for r in records)),
+        conditions=list(dict.fromkeys(r["condition"] for r in records)),
+    )
+    means = _cohort_means(rows, config)
+    if len({r["run_id"] for r in records}) > 1:
+        # Separate executions do not form one matched cohort.
+        means = dict.fromkeys(config["conditions"])
+    target = policy["target_mean_recovery"]
+    return dict(
+        rows=rows,
+        mean_recovery=means,
+        report_policy=policy,
+        target_met={
+            c: value >= target if value is not None and target is not None else None
+            for c, value in means.items()
+        },
+    )
+
+
+def _cohort_means(rows, config):
+    """Mean recovery per condition, only when every model has a complete matched result."""
+    baselines = {r["model"]: r for r in rows if r["condition"] == "fp32"}
+    means = {}
+    for condition in config["conditions"]:
+        selected = [r for r in rows if r["condition"] == condition]
+        complete = len(selected) == len(config["models"]) and all(
+            r["full_evaluation"]
+            and r["samples"] == r["expected_samples"]
+            and r["recovery_pct"] is not None
+            and baselines.get(r["model"], {}).get("full_evaluation", False)
+            and baselines[r["model"]]["samples"]
+            == baselines[r["model"]]["expected_samples"]
+            == r["expected_samples"]
+            for r in selected
+        )
+        means[condition] = (
+            sum(r["recovery_pct"] for r in selected) / len(selected)
+            if complete
+            else None
+        )
+    return means
+
+
+def _markdown(rows, means, target, target_met):
+    lines = [
+        "# Evaluation results",
+        "",
+        "QDQ / matched FP32 × 100; arithmetic mean with equal weight per model.",
+        "",
+        "| Model | Condition | Metric | Accuracy (%) | Recovery (%) | Samples | Complete |",
+        "|---|---|---|---:|---:|---:|---|",
+    ]
+    for r in rows:
+        ratio = "—" if r["recovery_pct"] is None else f"{r['recovery_pct']:.4f}"
+        accuracy = "—" if r["value_pct"] is None else f"{r['value_pct']:.4f}"
+        lines.append(
+            f"| {r['model']} | {r['condition']} | {r['metric']} | {accuracy} | {ratio} | {r['samples']} | {r['complete']} |"
+        )
+    lines += ["", "## Complete cohort mean", ""] + [
+        f"- {c}: {v:.4f}%"
+        if v is not None
+        else f"- {c}: incomplete / unmatched denominator"
+        for c, v in means.items()
+    ]
+    if target is not None:
+        lines += ["", f"Target mean recovery: {target:g}%", ""]
+        lines += [
+            f"- {c}: "
+            + ("not evaluated" if value is None else "met" if value else "not met")
+            for c, value in target_met.items()
+        ]
+    lines += [
+        "",
+        "These metrics describe QDQ accuracy. Integer-kernel or shift execution is not implied.",
+        "A complete local cohort does not certify equivalence to published/reference dataset bytes.",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def read_records(path):
@@ -437,5 +727,7 @@ def read_records(path):
     value = read_json(path)
     if value.get("schema_version") != SCHEMA_VERSION:
         raise ValueError("Unsupported measurement record schema")
+    if value.get("functional_checks"):
+        reject_partial_result({"evaluation_mode": "functional_check"})
     tables(value["records"])
     return value

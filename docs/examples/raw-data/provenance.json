@@ -1,0 +1,36 @@
+{
+  "example-full": {
+    "source": {
+      "run_sha256": "6083e6c9826062dd236a9262cd1432e1384ed44afd1af29e41556e32f1001933",
+      "prepared_sha256": "0d95abe405bd8a45fb5d2f89517c5a1e059e7fa4677b5b1eafcf72d00a516a2f",
+      "selection_identity": "8561ec5c90feedd777a590ad1e1d01d964032588d26b9e5d9a429b75b3989e06",
+      "verification": "sealed evaluation metadata; no inference or external model reads"
+    },
+    "files": {
+      "raw_data.csv": "b4cc52514f3c710ec19997d04b6bdb34202019a330c0907539a2846d0ea0001a"
+    },
+    "table_revision": {
+      "input_csv_sha256": "c734bb21b761b0a03427229453d5d30e23e29207b5c4fea79892484eb8303c5a",
+      "calculation": "opennpu_quant.results.recovery_percent from retained metrics_json; 100 * INT8 / FP32 before display-unit conversion",
+      "source_runs_revalidated": false,
+      "inference_rerun": false
+    }
+  },
+  "example-partial": {
+    "source": {
+      "run_sha256": "b242491d44b73c40741d74da2096783eda161115e532e26a58700e08ff49e945",
+      "prepared_sha256": "d308f196a7914aaa6b8cbbdf8995094de4882a950a7493962361b24076dee7e4",
+      "selection_identity": "694cb2d2d37443df92a3ef2ddb1f3c58570e6a51c0cc897765ab8aa5c7c715e8",
+      "verification": "sealed evaluation metadata; no inference or external model reads"
+    },
+    "files": {
+      "raw_data.partial.csv": "04602e5bd6acf5e973e856713c2e329cc2b13c6996fdbed47cfa5a405bca442b"
+    },
+    "table_revision": {
+      "input_csv_sha256": "2a22dcd5aa4dac978920257d0cb57c4f2abb1c93c5c1418e5c2c23c9aa8e66a4",
+      "calculation": "opennpu_quant.results.recovery_percent from retained metrics_json; 100 * INT8 / FP32 before display-unit conversion",
+      "source_runs_revalidated": false,
+      "inference_rerun": false
+    }
+  }
+}

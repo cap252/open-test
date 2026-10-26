@@ -1,0 +1,48 @@
+name: efficientnet_lite4
+title: EfficientNet-Lite4
+task: classification
+dataset: imagenet
+metric: top1
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - 380
+  - 380
+  layout: NCHW
+graphs:
+  network: network.onnx
+preprocess:
+  kind: center_crop
+  resize: 413
+  crop: 380
+  interpolation: bilinear
+  mean:
+  - 0.5
+  - 0.5
+  - 0.5
+  std:
+  - 0.5
+  - 0.5
+  - 0.5
+decode:
+  profile: numpy_argsort_v1
+  kind: logits
+  output: logits
+source:
+  url: https://huggingface.co/timm/tf_efficientnet_lite4.in1k/resolve/9006f1cfa1c536cdfc0a2d7011d075179e69a9ca/model.safetensors
+  sha256: add1698c071e7fb120a9f51153b15e18789ce3466a69f084853deb2eb334af9c
+  variant: tf_efficientnet_lite4.in1k
+  code_revision: e44f14d7d2f557b9f3add82ee4f1ed2beefbb30d
+  builder: tf_efficientnet_lite4.in1k
+  weights: tf_efficientnet_lite4.in1k
+  package:
+    name: timm
+    version: 1.0.15
+export:
+  family: timm
+  opset: 18
+  simplify: true
+  framework_parity:
+    logits_absolute_bound: 0.0001

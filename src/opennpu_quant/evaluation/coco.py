@@ -1,7 +1,23 @@
-def evaluate_predictions(ground_truth, predictions, image_ids):
+import copy
+import contextlib
+import sys
+
+
+def evaluate_predictions(
+    ground_truth, predictions, image_ids, iou_type="bbox", *, mask_area="mask"
+):
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
 
+    if mask_area not in ("mask", "bbox"):
+        raise ValueError("COCO mask_area must be mask or bbox")
+    if iou_type == "segm" and mask_area == "mask":
+        # COCO loadRes otherwise uses bbox area even when scoring masks.
+        predictions = [
+            {k: v for k, v in row.items() if k != "bbox"} for row in predictions
+        ]
+    # loadRes annotates rows in place; callers may replay the same predictions.
+    predictions = copy.deepcopy(predictions)
     if predictions:
         detected = ground_truth.loadRes(predictions)
     else:
@@ -12,7 +28,9 @@ def evaluate_predictions(ground_truth, predictions, image_ids):
             annotations=[],
         )
         detected.createIndex()
-    evaluator = COCOeval(ground_truth, detected, "bbox")
+    if iou_type not in ("bbox", "segm", "keypoints"):
+        raise ValueError("Unsupported COCO evaluation type")
+    evaluator = COCOeval(ground_truth, detected, iou_type)
     evaluator.params.imgIds = list(image_ids)
     evaluator.evaluate()
     evaluator.accumulate()
@@ -31,7 +49,21 @@ def evaluate_predictions(ground_truth, predictions, image_ids):
         "AR_medium",
         "AR_large",
     ]
-    metrics = {name: float(v) for name, v in zip(names, evaluator.stats)}
+    if iou_type == "keypoints":
+        names = [
+            "AP",
+            "AP50",
+            "AP75",
+            "AP_medium",
+            "AP_large",
+            "AR",
+            "AR50",
+            "AR75",
+            "AR_medium",
+            "AR_large",
+        ]
+    # pycocotools reports -1 for a range without ground truth (e.g. no small objects).
+    metrics = {name: float(v) for name, v in zip(names, evaluator.stats) if v >= 0}
     per_class = []
     for i, category in enumerate(evaluator.params.catIds):
         precision = evaluator.eval["precision"][:, :, i, 0, -1]
@@ -45,21 +77,23 @@ def evaluate_predictions(ground_truth, predictions, image_ids):
         )
     return dict(
         metrics=metrics,
+        mask_area=mask_area if iou_type == "segm" else None,
         per_class=per_class,
         image_count=len(image_ids),
         prediction_count=len(predictions),
         iou_thresholds=evaluator.params.iouThrs.tolist(),
         max_detections=evaluator.params.maxDets,
-        evaluator="pycocotools.cocoeval.COCOeval bbox; standard 101 recall thresholds and crowd/area handling",
+        evaluator=f"pycocotools.cocoeval.COCOeval {iou_type}; standard 101 recall thresholds and crowd/area handling",
     )
 
 
 class CocoMetric:
-    def __init__(self, annotation, *, iou_type="bbox"):
-        if iou_type not in ("bbox", "keypoints"):
-            raise ValueError("COCO bbox or keypoints required")
-        self.annotation = str(annotation)
+    """Collect COCO bbox detections per image and score them with pycocotools."""
+
+    def __init__(self, annotation, *, iou_type="bbox", mask_area="mask"):
         self.iou_type = iou_type
+        self.mask_area = mask_area
+        self.annotation = str(annotation)
         self.reset()
 
     def reset(self):
@@ -74,40 +108,14 @@ class CocoMetric:
 
     def finalize(self):
         from pycocotools.coco import COCO
-        from pycocotools.cocoeval import COCOeval
 
-        ground_truth = COCO(self.annotation)
-        if self.iou_type == "bbox":
-            result = evaluate_predictions(
-                ground_truth, self.predictions, self.image_ids
+        # pycocotools prints progress; keep stdout for the CLI's JSON result.
+        with contextlib.redirect_stdout(sys.stderr):
+            self.details = evaluate_predictions(
+                COCO(self.annotation),
+                self.predictions,
+                self.image_ids,
+                self.iou_type,
+                mask_area=self.mask_area,
             )
-            self.details = result
-            return result["metrics"]
-        if self.predictions:
-            detected = ground_truth.loadRes(self.predictions)
-        else:
-            detected = COCO()
-            detected.dataset = dict(
-                images=ground_truth.dataset["images"],
-                categories=ground_truth.dataset["categories"],
-                annotations=[],
-            )
-            detected.createIndex()
-        evaluator = COCOeval(ground_truth, detected, "keypoints")
-        evaluator.params.imgIds = list(self.image_ids)
-        evaluator.evaluate()
-        evaluator.accumulate()
-        evaluator.summarize()
-        names = [
-            "AP",
-            "AP50",
-            "AP75",
-            "AP_medium",
-            "AP_large",
-            "AR",
-            "AR50",
-            "AR75",
-            "AR_medium",
-            "AR_large",
-        ]
-        return dict(zip(names, map(float, evaluator.stats)))
+        return self.details["metrics"]

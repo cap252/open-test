@@ -135,8 +135,6 @@ def verify_parameters(source, audit, *, runtime=False):
         scale, zero = parameters(row["dq_node"])
         act, _ = parameters(row["activation_dq_node"])
         weight, _ = parameters(row["weight_dq_node"])
-        if "weight_group_shape" in row:
-            weight = weight.reshape(row["weight_group_shape"]).max(axis=1)
         with np.errstate(over="ignore", under="ignore", invalid="ignore"):
             expected = np.asarray(act * weight, np.float32)
         normal_scale(scale)

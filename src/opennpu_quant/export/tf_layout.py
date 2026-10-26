@@ -85,13 +85,3 @@ def static_logits_resize(model):
             node.input[2] = ""
             node.input[3] = sizes_name
     return extract(model, ["images"], ["logits"])
-
-
-def postprocess_inputs(producers, output_name):
-    """Walk back from the logits through Resize nodes; the first non-Resize tensor is the network output."""
-    name = output_name
-    while name in producers and producers[name].op_type == "Resize":
-        name = producers[name].input[0]
-    if name == output_name:
-        raise ValueError("The graph does not end in a logits Resize")
-    return [name]

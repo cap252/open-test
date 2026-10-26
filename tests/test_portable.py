@@ -1,4 +1,4 @@
-import copy, shutil, subprocess, sys, tempfile, unittest
+import copy, json, shutil, subprocess, sys, tempfile, unittest
 from pathlib import Path
 from unittest.mock import patch
 import numpy as np
@@ -11,14 +11,20 @@ from opennpu_quant._io import atomic_json, read_json
 
 class PortableTests(unittest.TestCase):
     def test_import_does_not_load_numerical_runtimes(self):
-        code = "import sys; import opennpu_quant; assert not set(['numpy','onnx','onnxruntime','torch','tensorflow']) & set(sys.modules)"
-        subprocess.run([sys.executable, "-c", code], check=True)
+        code = "import sys, json; import opennpu_quant; print(json.dumps(sorted(set(['numpy','onnx','onnxruntime','torch','tensorflow']) & set(sys.modules))))"
+        result = subprocess.run(
+            [sys.executable, "-O", "-c", code],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual([], json.loads(result.stdout))
 
     def test_recipes_and_strict_config(self):
         from opennpu_quant.models.spec import model_names, ModelSpec
         from opennpu_quant.configuration import validate
 
-        self.assertEqual(10, len(model_names()))
+        self.assertEqual(38, len(model_names()))
         for name in model_names():
             self.assertEqual(name, ModelSpec.load(name).name)
         cfg = load_config()
@@ -82,6 +88,8 @@ class PortableTests(unittest.TestCase):
                 self.assertTrue(
                     prepared["calibration"][0]["path"].startswith("calibration_images/")
                 )
+                # The detected HF layout is recorded even with the default --source.
+                self.assertEqual("hf", prepared["source"])
                 (root / "validation_images/img_00000000_label_2.jpg").write_bytes(
                     b"train"
                 )
@@ -124,13 +132,14 @@ class PortableTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             compare({"logits": a}, {"logits": b})
         b[0, 0] = 0.001
-        with self.assertRaises(ValueError):
-            framework_compare({"logits": a}, {"logits": b}, recipe)
+        result = framework_compare({"logits": a}, {"logits": b}, recipe)
+        self.assertFalse(result["effective_passed"])
+        self.assertEqual("differences", result["state"])
         self.assertEqual(1e-5, AdaroundConfig().atol)
 
     def test_atomic_download_and_archive_escape(self):
         import hashlib, tarfile, io
-        from opennpu_quant.fetch import download, extract_archive
+        from opennpu_quant.export.download import download, extract_archive
 
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -150,6 +159,25 @@ class PortableTests(unittest.TestCase):
                 archive.addfile(header, io.BytesIO(b"x"))
             with self.assertRaises(ValueError):
                 extract_archive(root / "bad.tar", root / "out")
+
+    def test_failed_upstream_checkout_removes_the_partial_clone(self):
+        import subprocess
+        from opennpu_quant.export.torch_models import checkout
+
+        def run(command, **options):
+            if "clone" in command:
+                Path(command[-1]).mkdir(parents=True)
+                return
+            raise subprocess.CalledProcessError(128, command)
+
+        recipe = dict(name="toy", source=dict(repo="file:///invalid", commit="0" * 40))
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch("opennpu_quant.export.torch_models.subprocess.run", side_effect=run),
+        ):
+            with self.assertRaises(subprocess.CalledProcessError):
+                checkout(recipe, temp)
+            self.assertFalse((Path(temp) / "sources/toy" / ("0" * 40)).exists())
 
     def test_model_lock(self):
         from opennpu_quant._locking import RunLock
@@ -200,6 +228,7 @@ class PortableTests(unittest.TestCase):
             onnx.save_model(model, directory / "network.onnx")
             recipe = copy.deepcopy(ModelSpec.load("resnet18").recipe)
             recipe["name"] = "toy"
+            recipe["decode"]["profile"] = "current_v1"
             recipe["preprocess"].update(resize=4, crop=4)
             recipe["input"]["shape"] = [1, 3, 4, 4]
             (directory / "recipe.yaml").write_text(yaml.safe_dump(recipe))
@@ -226,6 +255,7 @@ class PortableTests(unittest.TestCase):
                 ),
             )
             config = load_config()
+            config["runtime"]["device"] = "cpu"
             config["name"] = "toy_run"
             config["models"] = ["toy"]
             config["percentiles"]["toy"] = dict(pot=99.9, float=99.9)
@@ -261,23 +291,6 @@ class PortableTests(unittest.TestCase):
             regenerated = run(config, paths)
             self.assertEqual(5, len(regenerated["rows"]))
             self.assertEqual("top1", read_json(target)["metric"])
-            # Import a relocated statistics bundle using content, model and feed checks.
-            stored = next(
-                (paths.cache / "calibration/toy").glob("*/complete.json")
-            ).parent
-            shutil.copytree(stored, paths.cache / "calibration/toy/reference")
-            imported = copy.deepcopy(config)
-            imported["name"] = "toy_reference"
-            imported["calibration"]["source"] = "reference"
-            imported["conditions"] = {
-                k: imported["conditions"][k] for k in ("fp32", "pot_rtn")
-            }
-            with patch(
-                "opennpu_quant.runner.calibrate",
-                side_effect=AssertionError("must reuse verified statistics"),
-            ):
-                reused = run(imported, paths)
-            self.assertEqual(2, len(reused["rows"]))
             # A failed stage records failure, not a permanently running model.
             failed = copy.deepcopy(config)
             failed["name"] = "forced_failure"

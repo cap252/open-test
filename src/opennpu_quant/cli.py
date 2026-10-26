@@ -9,7 +9,6 @@ import contextlib
 import json
 import math
 import os
-from pathlib import Path
 import sys
 
 from . import __version__
@@ -79,7 +78,16 @@ def _path_options(parser, *, output=False):
     )
 
 
+def _add_report_options(parser):
+    parser.add_argument(
+        "--format",
+        help="Comma-separated csv,tsv,json,md (default: csv,json)",
+    )
+    parser.add_argument("--table-profile", choices=("opennpu_raw",))
+
+
 def _add_run_options(run):
+    _add_report_options(run)
     run.add_argument(
         "-c",
         "--config",
@@ -290,15 +298,12 @@ def build_parser():
         "run_dir",
         help="Run folder <output>/<experiment name>, containing effective_config.json",
     )
-    report.add_argument(
-        "--format", help="Comma-separated md,csv,tsv,json (default: all)"
-    )
+    _add_report_options(report)
     report.add_argument(
         "--stdout",
         choices=["tsv", "csv"],
         help="Print only the raw table to stdout (report files are still written)",
     )
-    report.add_argument("--table-profile", choices=("opennpu_raw",))
     report.set_defaults(handler=_report)
 
     results = sub.add_parser(
@@ -318,7 +323,7 @@ def build_parser():
         choices=["tsv", "csv"],
         help="Print only the raw table for Excel or redirection",
     )
-    results.add_argument("--table-profile", choices=("opennpu_raw",))
+    _add_report_options(results)
     results.set_defaults(handler=_results)
     from .reproduction.cli import add_parser
 
@@ -478,7 +483,11 @@ def _report(args):
 
 
 def _results(args):
-    from .results import export_records, read_records, tables
+    from .results import export_records, read_records, tables, normalize_formats
+
+    formats = normalize_formats(args.format)
+    if args.format is not None and not args.output:
+        raise ValueError("--format requires --output; use --stdout for console output")
 
     if args.table_profile and not args.output:
         raise ValueError(
@@ -491,6 +500,7 @@ def _results(args):
             payload["records"],
             args.output,
             metadata=payload.get("metadata"),
+            formats=formats,
             table_profile=args.table_profile,
         )
     if args.stdout:
@@ -520,6 +530,9 @@ def _results(args):
 def _run(args):
     from .configuration import load_config, validate
     from .models.spec import model_names
+    from .results import normalize_formats
+
+    formats = normalize_formats(args.format)
 
     paths = _paths(args)
     config = load_config(args.config)
@@ -565,7 +578,14 @@ def _run(args):
         else contextlib.nullcontext()
     )
     with progress:
-        result = run(config, paths, force=args.force, recalibrate=args.recalibrate)
+        result = run(
+            config,
+            paths,
+            force=args.force,
+            recalibrate=args.recalibrate,
+            formats=formats,
+            table_profile=args.table_profile,
+        )
     return dict(
         output=str(paths.runs / config["name"]),
         device=config["runtime"]["device"],
@@ -619,7 +639,6 @@ def _print_run_summary(result):
         )
         print(f"  {condition}: {detail}")
     print("\nOutput:", result["output"])
-    print("Summary:", str(Path(result["output"]) / "summary.md"))
 
 
 def _apply_run_overrides(config, args):

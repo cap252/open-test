@@ -53,9 +53,9 @@ opennpu-quant reproduce report --run workspace/repro/representative-3-run \
   --table-profile opennpu_raw
 ```
 
-Check for four ready conditions, four completed conditions and `full: 0 / partial: 4 / excluded: 0`. The results are in `workspace/repro/representative-3-tables/raw_data.partial.csv` and `.tsv`. These scores describe only the three-image subsets.
+Check for four ready conditions, four completed conditions and `full: 0 / partial: 4 / excluded: 0`. The results are in `workspace/repro/representative-3-tables/raw_data.partial.csv`. These scores describe only the three-image subsets.
 
-For full evaluation of the same models and conditions, set `--limit full` in `reproduce prepare` and replace `representative-3` with `representative-full` in all three commands. Use the new package and output directories throughout. A completed full evaluation reports `full: 4 / partial: 0 / excluded: 0` and writes `raw_data.csv` and `.tsv`. The next section evaluates all 30 models.
+For full evaluation of the same models and conditions, set `--limit full` in `reproduce prepare` and replace `representative-3` with `representative-full` in all three commands. Use the new package and output directories throughout. A completed full evaluation reports `full: 4 / partial: 0 / excluded: 0` and writes `raw_data.csv`. The next section evaluates all 30 models.
 
 ### 3. Evaluate all selected conditions
 
@@ -73,7 +73,7 @@ opennpu-quant reproduce report --run workspace/repro/cnn30-full-run \
   --table-profile opennpu_raw
 ```
 
-Check **210 ready**, **210 completed**, and **`full: 210 / partial: 0 / excluded: 0`** separately. Import `workspace/repro/cnn30-full-tables/raw_data.csv` or `.tsv` into Excel. The 15-column report uses this execution's measured values. Original metric comparisons are in each condition's `result.json` under `original_accuracy`. Execution completion and numerical agreement are separate verdicts.
+Check **210 ready**, **210 completed**, and **`full: 210 / partial: 0 / excluded: 0`** separately. Import `workspace/repro/cnn30-full-tables/raw_data.csv` into Excel. The 15-column report uses this execution's measured values. Original metric comparisons are in each condition's `result.json` under `original_accuracy`. Execution completion and numerical agreement are separate verdicts.
 
 LFW requires all 6,000 pairs. A small request that includes MobileFaceNet stops before any model executes, so specify the representative models for small checks. The [reproduction guide](docs/reproducing-results.md) covers asset checks, storage, resume and comparisons between servers.
 

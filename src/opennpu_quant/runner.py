@@ -67,8 +67,17 @@ def runtime_audit(result, ort):
         return audit_runtime(original, executed, result.audit)
 
 
-def run(config, paths, *, force=False, recalibrate=False):
+def run(
+    config, paths, *, force=False, recalibrate=False, formats=None, table_profile=None
+):
     """Execute configured models sequentially under one run-directory lock."""
+    from .results import normalize_formats
+
+    formats = normalize_formats(formats)
+    if table_profile is not None:
+        from .raw_report import validate_profile
+
+        validate_profile(table_profile)
     validate(config, models_dir=paths.models)
     if recalibrate and not any(config["conditions"].values()):
         raise ValueError("--recalibrate requires a quantized condition")
@@ -126,7 +135,7 @@ def run(config, paths, *, force=False, recalibrate=False):
                 _run_model(name, config, paths, out, ort, code, force, status)
                 status["models"][name]["state"] = "completed"
                 atomic_json(out / "status.json", status)
-                report(out)
+                report(out, formats=formats, table_profile=table_profile)
         except BaseException as error:
             status["state"] = (
                 "interrupted" if isinstance(error, KeyboardInterrupt) else "failed"
@@ -142,11 +151,11 @@ def run(config, paths, *, force=False, recalibrate=False):
             atomic_json(out / "status.json", status)
             # Best effort: a report failure must not hide the original error.
             with contextlib.suppress(Exception):
-                report(out)
+                report(out, formats=formats, table_profile=table_profile)
             raise
         status.update(state="completed", finished=now())
         atomic_json(out / "status.json", status)
-        return report(out)
+        return report(out, formats=formats, table_profile=table_profile)
 
 
 def _run_model(name, config, paths, out, ort, code, force, status):

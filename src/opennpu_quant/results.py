@@ -11,6 +11,8 @@ from .data.lfw_protocol import reject_partial_result
 
 SCHEMA_VERSION = 1
 SUCCESS = {"completed", "evaluated", "reused"}
+REPORT_FORMATS = ("csv", "tsv", "json", "md")
+DEFAULT_REPORT_FORMATS = ("csv", "json")
 METRIC_FIELDS = "run_id model model_name condition state metric value unit value_pct primary".split()
 
 RAW_FIELDS = """model task dataset metric fp32_accuracy int8_accuracy recovery_percent
@@ -379,9 +381,9 @@ def _text(path, text, encoding):
     temporary.replace(path)
 
 
-def normalize_formats(formats, *, allowed=("csv", "tsv", "json")):
+def normalize_formats(formats, *, allowed=REPORT_FORMATS):
     if formats is None:
-        return frozenset(allowed)
+        return frozenset(DEFAULT_REPORT_FORMATS) & frozenset(allowed)
     values = formats.split(",") if isinstance(formats, str) else list(formats)
     if not values or any(
         not isinstance(v, str) or v.strip() not in allowed for v in values
@@ -422,23 +424,26 @@ def report_policy(value):
 
 
 def export_records(
-    records, directory, *, metadata=None, formats=None, table_profile=None
+    records, directory, *, metadata=None, formats=None, table_profile=None, summary=None
 ):
-    """Write selected raw records and tables; omitted formats preserves all outputs."""
+    """Write CSV and JSON by default; a table profile replaces the primary table."""
     selected = normalize_formats(formats)
     if table_profile:
         from .raw_report import build_report, write_report
 
         compatible = build_report(records, profile=table_profile)
     rows, metrics = tables(records)
+    if summary is None:
+        summary = summarize(
+            records, rows=rows, policy=(metadata or {}).get("report_policy")
+        )
     raw_rows = [raw_export_row(row) for row in rows]
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    for name, values, fields in (
-        ("accuracy", raw_rows, RAW_FIELDS),
-        ("results", raw_rows, RAW_FIELDS),
-        ("metrics", metrics, METRIC_FIELDS),
-    ):
+    exports = [("metrics", metrics, METRIC_FIELDS)]
+    if not table_profile:
+        exports.insert(0, ("results", raw_rows, RAW_FIELDS))
+    for name, values, fields in exports:
         if "csv" in selected:
             _text(
                 directory / (name + ".csv"),
@@ -454,9 +459,105 @@ def export_records(
                 schema_version=SCHEMA_VERSION, metadata=metadata or {}, records=records
             ),
         )
+        atomic_json(directory / "summary.json", summary)
+    if "md" in selected:
+        _text(
+            directory / "summary.md",
+            _markdown(
+                summary["rows"],
+                summary["mean_recovery"],
+                summary["report_policy"]["target_mean_recovery"],
+                summary["target_met"],
+            ),
+            "utf-8",
+        )
     if table_profile:
-        write_report(compatible, directory, source=metadata)
+        write_report(compatible, directory, source=metadata, formats=selected)
     return rows
+
+
+def summarize(records, *, rows=None, policy=None):
+    """Summarize the selected cohort identically for generated and replayed models."""
+    rows = tables(records)[0] if rows is None else rows
+    policy = report_policy(policy)
+    config = dict(
+        models=list(dict.fromkeys(r["model"] for r in records)),
+        conditions=list(dict.fromkeys(r["condition"] for r in records)),
+    )
+    means = _cohort_means(rows, config)
+    if len({r["run_id"] for r in records}) > 1:
+        # Separate executions do not form one matched cohort.
+        means = dict.fromkeys(config["conditions"])
+    target = policy["target_mean_recovery"]
+    return dict(
+        rows=rows,
+        mean_recovery=means,
+        report_policy=policy,
+        target_met={
+            c: value >= target if value is not None and target is not None else None
+            for c, value in means.items()
+        },
+    )
+
+
+def _cohort_means(rows, config):
+    """Mean recovery per condition, only when every model has a complete matched result."""
+    baselines = {r["model"]: r for r in rows if r["condition"] == "fp32"}
+    means = {}
+    for condition in config["conditions"]:
+        selected = [r for r in rows if r["condition"] == condition]
+        complete = len(selected) == len(config["models"]) and all(
+            r["complete"]
+            and r["samples"] == r["expected_samples"]
+            and r["recovery_pct"] is not None
+            and baselines.get(r["model"], {}).get("complete", False)
+            and baselines[r["model"]]["samples"]
+            == baselines[r["model"]]["expected_samples"]
+            == r["expected_samples"]
+            for r in selected
+        )
+        means[condition] = (
+            sum(r["recovery_pct"] for r in selected) / len(selected)
+            if complete
+            else None
+        )
+    return means
+
+
+def _markdown(rows, means, target, target_met):
+    lines = [
+        "# Evaluation results",
+        "",
+        "QDQ / matched FP32 × 100; arithmetic mean with equal weight per model.",
+        "",
+        "| Model | Condition | Metric | Accuracy (%) | Recovery (%) | Samples | Complete |",
+        "|---|---|---|---:|---:|---:|---|",
+    ]
+    for r in rows:
+        ratio = "—" if r["recovery_pct"] is None else f"{r['recovery_pct']:.4f}"
+        accuracy = "—" if r["value_pct"] is None else f"{r['value_pct']:.4f}"
+        lines.append(
+            f"| {r['model']} | {r['condition']} | {r['metric']} | {accuracy} | {ratio} | {r['samples']} | {r['complete']} |"
+        )
+    lines += ["", "## Complete cohort mean", ""] + [
+        f"- {c}: {v:.4f}%"
+        if v is not None
+        else f"- {c}: incomplete / unmatched denominator"
+        for c, v in means.items()
+    ]
+    if target is not None:
+        lines += ["", f"Target mean recovery: {target:g}%", ""]
+        lines += [
+            f"- {c}: "
+            + ("not evaluated" if value is None else "met" if value else "not met")
+            for c, value in target_met.items()
+        ]
+    lines += [
+        "",
+        "These metrics describe QDQ accuracy. Integer-kernel or shift execution is not implied.",
+        "A complete local cohort does not certify equivalence to published/reference dataset bytes.",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def read_records(path):

@@ -79,8 +79,8 @@ class ReportPolicyTests(unittest.TestCase):
         outputs = {
             "md": {"summary.md"},
             "json": {"records.json", "summary.json"},
-            "csv": {n + ".csv" for n in ("accuracy", "results", "metrics")},
-            "tsv": {n + ".tsv" for n in ("accuracy", "results", "metrics")},
+            "csv": {n + ".csv" for n in ("results", "metrics")},
+            "tsv": {n + ".tsv" for n in ("results", "metrics")},
         }
         for count in range(1, 5):
             for chosen in itertools.combinations(outputs, count):
@@ -102,8 +102,9 @@ class ReportPolicyTests(unittest.TestCase):
             root = Path(d)
             self.fixture(root)
             report(root)
-            self.assertTrue(
-                set().union(*outputs.values()) <= {p.name for p in root.iterdir()}
+            self.assertEqual(
+                outputs["csv"] | outputs["json"],
+                {p.name for p in root.iterdir()} - {"effective_config.json", "m"},
             )
 
     def test_primary_metric_target_and_source_immutability(self):
@@ -201,7 +202,7 @@ class ReportPolicyTests(unittest.TestCase):
                 capture_output=True,
                 check=True,
             )
-            self.assertEqual((root / "accuracy.tsv").read_text(), proc.stdout)
+            self.assertEqual((root / "results.tsv").read_text(), proc.stdout)
             self.assertEqual("", proc.stderr)
             self.assertFalse((root / "summary.json").exists())
 

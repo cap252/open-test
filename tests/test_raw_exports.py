@@ -147,9 +147,9 @@ class RawExportTests(unittest.TestCase):
 
     def test_run_exports_and_cli_stdout_use_the_same_raw_schema(self):
         records = self.run_records()
-        export_records(records, self.root / "run")
+        export_records(records, self.root / "run", formats="csv,tsv,json")
         exported = []
-        for name in ("accuracy", "results"):
+        for name in ("results",):
             for suffix, delimiter in (("csv", ","), ("tsv", "\t")):
                 with (self.root / f"run/{name}.{suffix}").open(
                     encoding="utf-8-sig", newline=""
@@ -250,7 +250,7 @@ class RawExportTests(unittest.TestCase):
         self.assertEqual("object_detection", rows[1]["task"])
         self.assertEqual(97.5, float(rows[1]["recovery_percent"]))
         self.assertEqual(99.99, float(rows[1]["percentile"]))
-        self.assertEqual((directory / "accuracy.tsv").read_text(), result.stdout)
+        self.assertFalse((directory / "accuracy.tsv").exists())
         self.assertEqual((directory / "results.tsv").read_text(), result.stdout)
 
     def test_percentile_is_separate_and_other_calibration_methods_stay_distinct(self):

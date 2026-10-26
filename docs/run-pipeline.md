@@ -68,7 +68,7 @@ A run first verifies its settings, model bundle and dataset. FP32 conditions go 
 
 `status.json` tracks each model and condition as `pending`, `running`, `completed`, `reused`, `failed` or `interrupted`, together with any error. A directory lock keeps two runs from writing to the same run directory. Reports are refreshed after each model, at the end and after a failure.
 
-When the run finishes, the console shows each condition's metric, accuracy, recovery, sample count and `partial` or `full` scope. `run --json` prints `output`, `device`, `rows` and `mean_recovery` as JSON and sends progress messages to stderr. The console format does not change which report files are written.
+When the run finishes, the console shows each condition's metric, accuracy, recovery, sample count and `partial` or `full` scope. `run --json` prints `output`, `device`, `rows` and `mean_recovery` as JSON and sends progress messages to stderr. The console format does not change which report files are written. Use `--format` and `--table-profile` to select files, with the same options as [report commands](reporting.md#output-files). TSV and Markdown are optional.
 
 To write the Excel-compatible `raw_data.*` tables or rebuild reports later, use `report` as described in [Reports and Excel export](reporting.md). [How to read a result](validation.md#how-to-read-a-result) explains what partial and full results can show.
 
@@ -101,11 +101,10 @@ Reuse depends on an **identity**: a content hash of the code, model graphs, inpu
 ├── .lock                    Execution lock
 ├── effective_config.json    Settings that produced these results
 ├── status.json              Run/model/condition states and errors
-├── summary.md, summary.json Per-condition results and cohort means
+├── summary.json             Per-condition results and cohort means
 ├── records.json             Portable measurement records, input to results
-├── accuracy.csv/tsv          15-column table, identical to results.csv/tsv
-├── results.csv/tsv
-├── metrics.csv/tsv           One row per metric
+├── results.csv              15-column primary table
+├── metrics.csv              One row per metric
 └── <model>/
     ├── recalibration.json   Recalibration request, if present
     ├── input_cache.json     Input-cache metadata, when enabled

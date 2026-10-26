@@ -1,4 +1,5 @@
 import copy
+import contextlib
 import csv
 import io
 import json
@@ -89,6 +90,213 @@ def replay(root, *, full=False, pairs=False):
 
 
 class RawReportTests(unittest.TestCase):
+    def test_run_and_replay_share_formats_and_measurements(self):
+        expected_formats = {
+            "csv": {"results.csv", "metrics.csv"},
+            "tsv": {"results.tsv", "metrics.tsv"},
+            "json": {"records.json", "summary.json"},
+            "md": {"summary.md"},
+        }
+        for full in (False, True):
+            for profile in (None, "opennpu_raw"):
+                for formats in (None, "csv", "tsv", "json", "md", "csv,tsv,json,md"):
+                    with (
+                        self.subTest(full=full, profile=profile, formats=formats),
+                        tempfile.TemporaryDirectory() as temp,
+                    ):
+                        root = Path(temp)
+                        package, run, prepared, _ = replay(root / "replay", full=full)
+                        standard = root / "ordinary"
+                        entries = [r["entry"] for r in prepared["conditions"]]
+                        policy = dict(
+                            scope="all",
+                            activation_symmetric=False,
+                            weight_granularity="per_channel",
+                            method="percentile",
+                            percentile=99.99,
+                            activation_scale="pot_ceil",
+                            weight_scale="pot_ceil",
+                        )
+                        config = dict(
+                            name="test",
+                            models=["resnet18"],
+                            conditions={
+                                "fp32": {},
+                                "asym_pc_pot_rtn": {"scheme": "pot"},
+                            },
+                            schemes={"pot": policy},
+                            evaluation={"split": "validation"},
+                        )
+                        atomic_json(standard / "effective_config.json", config)
+                        for entry in entries:
+                            fp32 = entry["condition"] == "fp32"
+                            path = (
+                                standard
+                                / entry["model"]
+                                / entry["condition"]
+                                / "result.json"
+                            )
+                            atomic_json(
+                                path,
+                                dict(
+                                    title=entry["recipe"]["title"],
+                                    metric="top1",
+                                    metrics={"top1": 0.8 if fp32 else 0.78},
+                                    samples=2,
+                                    expected_samples=2 if full else 50000,
+                                    complete=full,
+                                    full_evaluation=full,
+                                    reference=False,
+                                    config_identity=object_hash(config),
+                                    model_identity="model",
+                                    preprocessing_identity="pre",
+                                    evaluation_identity="eval",
+                                    model_metadata=entry["recipe"],
+                                    scheme=None if fp32 else policy,
+                                ),
+                            )
+                            atomic_json(
+                                path.parent / "complete.json",
+                                dict(result_sha256=sha256(path)),
+                            )
+                        result = run_report(
+                            standard, formats=formats, table_profile=profile
+                        )
+                        output = root / "tables"
+                        counts = report(
+                            run=run,
+                            package=package,
+                            output=output,
+                            formats=formats,
+                            table_profile=profile,
+                        )
+                        selected = (formats or "csv,json").split(",")
+                        expected = set().union(*(expected_formats[f] for f in selected))
+                        if profile:
+                            expected.add("raw_data.metadata.json")
+                            for suffix in ("csv", "tsv"):
+                                if suffix in selected:
+                                    expected.remove("results." + suffix)
+                                    expected.update(
+                                        {
+                                            "raw_data." + suffix,
+                                            "raw_data.partial." + suffix,
+                                        }
+                                    )
+                        self.assertEqual(expected, {p.name for p in output.iterdir()})
+                        self.assertEqual(
+                            expected,
+                            {p.name for p in standard.iterdir() if p.is_file()}
+                            - {"effective_config.json"},
+                        )
+                        self.assertEqual(2, counts["full" if full else "partial"])
+                        self.assertEqual(97.5, result["rows"][1]["recovery_pct"])
+                        for filename in expected:
+                            if filename.endswith(
+                                (".csv", ".tsv")
+                            ) and not filename.startswith("metrics."):
+                                self.assertEqual(
+                                    (standard / filename).read_bytes(),
+                                    (output / filename).read_bytes(),
+                                )
+                        if "json" in selected:
+                            replay_summary = read_json(output / "summary.json")
+                            self.assertEqual(
+                                result["mean_recovery"], replay_summary["mean_recovery"]
+                            )
+                        self.assertFalse(list(output.glob("accuracy.*")))
+                        self.assertFalse(list(output.glob("*.xlsx")))
+
+    def test_cli_formats_match_and_invalid_formats_do_not_publish(self):
+        from opennpu_quant.cli import main, build_parser
+        from tests.test_review_fixes import ReportPolicyTests
+
+        parser = build_parser()
+        for command in (
+            ["run"],
+            ["report", "run"],
+            ["results", "records.json"],
+            [
+                "reproduce",
+                "report",
+                "--run",
+                "run",
+                "--package",
+                "package",
+                "--output",
+                "tables",
+            ],
+        ):
+            parsed = parser.parse_args(command)
+            self.assertIsNone(parsed.format)
+            self.assertIsNone(parsed.table_profile)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            package, run, _, _ = replay(root / "replay")
+            ordinary = root / "ordinary"
+            ReportPolicyTests().fixture(ordinary)
+            run_report(ordinary)
+            for formats in ("csv", "md", "tsv,json"):
+                with self.subTest(formats=formats):
+                    replay_out = root / ("replay-" + formats)
+                    portable_out = root / ("portable-" + formats)
+                    commands = [
+                        ["report", str(ordinary)],
+                        [
+                            "results",
+                            str(ordinary / "records.json"),
+                            "--output",
+                            str(portable_out),
+                        ],
+                        [
+                            "reproduce",
+                            "report",
+                            "--run",
+                            str(run),
+                            "--package",
+                            str(package),
+                            "--output",
+                            str(replay_out),
+                        ],
+                    ]
+                    for command in commands:
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            main(
+                                [
+                                    *command,
+                                    "--format",
+                                    formats,
+                                    "--table-profile",
+                                    "opennpu_raw",
+                                ]
+                            )
+                    self.assertEqual(
+                        {p.name for p in portable_out.iterdir()},
+                        {p.name for p in replay_out.iterdir()},
+                    )
+                    self.assertFalse((replay_out / "results.csv").exists())
+                    self.assertEqual(
+                        "tsv" in formats, (replay_out / "raw_data.tsv").exists()
+                    )
+            for formats in ("xlsx", "csv,", ""):
+                out = root / "invalid"
+                with self.assertRaisesRegex(ValueError, "Supported report formats"):
+                    report(run=run, package=package, output=out, formats=formats)
+                self.assertFalse(out.exists())
+
+    def test_portable_summary_does_not_average_separate_runs(self):
+        with tempfile.TemporaryDirectory() as temp:
+            export_records(
+                [
+                    record(run_id="first", model="a", full_evaluation=True),
+                    record(run_id="second", model="b", full_evaluation=True),
+                ],
+                temp,
+            )
+            self.assertIsNone(
+                read_json(Path(temp) / "summary.json")["mean_recovery"]["fp32"]
+            )
+
     def test_workbook_format_all_models_and_schemes(self):
         self.assertEqual(RAW_FIELDS, FIXTURE["fields"])
         models = set()
@@ -140,7 +348,7 @@ class RawReportTests(unittest.TestCase):
                 float(rows[1]["recovery_percent"]),
             )
             self.assertEqual(
-                2, len((p / "raw_data.partial.tsv").read_text().splitlines())
+                2, len((p / "raw_data.partial.csv").read_text().splitlines())
             )
 
     def test_missing_mismatched_zero_or_unverified_denominator(self):
@@ -326,7 +534,12 @@ print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'
             saved["conditions"][1]["result"] = file_record(path, run)
             seal(package / "manifest.json", prepared)
             seal(run / "run.json", saved)
-            report(run=run, package=package, output=root / "tables")
+            report(
+                run=run,
+                package=package,
+                output=root / "tables",
+                table_profile="opennpu_raw",
+            )
             rows = list(
                 csv.DictReader(
                     (root / "tables/raw_data.partial.csv").open(encoding="utf-8-sig")
@@ -366,7 +579,12 @@ print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'
                 }[target]
                 path.write_text(path.read_text() + " ")
                 with self.assertRaisesRegex(ValueError, "changed"):
-                    report(run=run, package=package, output=root / "tables")
+                    report(
+                        run=run,
+                        package=package,
+                        output=root / "tables",
+                        table_profile="opennpu_raw",
+                    )
                 self.assertFalse((root / "tables").exists())
 
     def test_resealed_identity_mismatches_rejected(self):
@@ -389,7 +607,12 @@ print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'
                 saved["conditions"][0]["result"] = file_record(path, run)
                 seal(run / "run.json", saved)
                 with self.assertRaisesRegex(ValueError, "mismatch"):
-                    report(run=run, package=package, output=root / "tables")
+                    report(
+                        run=run,
+                        package=package,
+                        output=root / "tables",
+                        table_profile="opennpu_raw",
+                    )
                 self.assertFalse((root / "tables").exists())
 
     def test_empty_report_has_headers_and_metadata(self):
@@ -406,7 +629,7 @@ print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'
         self.assertEqual(6000, meta["pair_count"])
         self.assertEqual("current_v1", meta["evaluation_profile"])
         with tempfile.TemporaryDirectory() as temp:
-            write_report(build_report([]), temp)
+            write_report(build_report([]), temp, formats="csv,tsv")
             self.assertEqual(
                 "\t".join(RAW_FIELDS) + "\n", (Path(temp) / "raw_data.tsv").read_text()
             )

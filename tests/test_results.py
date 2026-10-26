@@ -183,7 +183,7 @@ class ResultTests(unittest.TestCase):
         q["model_name"] = "=1+1\t위험\n줄"
         q["metric_details"] = {"per_class_iou": [0.2, None, 0.4]}
         with tempfile.TemporaryDirectory() as temp:
-            export_records([base, q], temp)
+            export_records([base, q], temp, formats="csv,tsv,json")
             p = Path(temp)
             self.assertTrue(
                 (p / "results.csv").read_bytes().startswith(b"\xef\xbb\xbf")
@@ -304,6 +304,7 @@ print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'
             value = report(p)
             self.assertEqual("unverified", value["rows"][1]["state"])
             self.assertIsNone(value["rows"][1]["value_pct"])
+            report(p, formats="md")
             self.assertIn("—", (p / "summary.md").read_text())
             self.assertTrue((p / "records.json").is_file())
             code = """

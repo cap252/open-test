@@ -129,7 +129,13 @@ class RecoveryTests(unittest.TestCase):
                 expected = [100.0, 94.56136486193054]
                 self.assertEqual([r["recovery_percent"] for r in summary], expected)
                 output = root / "report"
-                counts = report(run=run, package=package, output=output)
+                counts = report(
+                    run=run,
+                    package=package,
+                    output=output,
+                    formats="csv,tsv,json",
+                    table_profile="opennpu_raw",
+                )
                 self.assertEqual(2, counts["full" if full else "partial"])
                 self.assertEqual(0, counts["excluded"])
                 for suffix, separator in (("csv", ","), ("tsv", "\t")):

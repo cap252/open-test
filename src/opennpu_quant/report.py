@@ -5,7 +5,7 @@ reported as measured; missing or failed measurements are never treated as zeros.
 """
 
 from pathlib import Path
-from ._io import read_json, atomic_json, sha256, object_hash
+from ._io import read_json, sha256, object_hash
 from .results import (
     export_records,
     metric_values,
@@ -13,7 +13,7 @@ from .results import (
     normalize_formats,
     report_policy,
     percent,
-    tables,
+    summarize,
 )
 
 # Files that complete.json may attest next to result.json (model.onnx has its own hash).
@@ -40,7 +40,7 @@ def verify_artifacts(directory, proof):
 
 def report(directory, *, formats=None, table_profile=None):
     """Compare matched FP32 denominators without treating missing results as zero."""
-    selected_formats = normalize_formats(formats, allowed=("md", "csv", "tsv", "json"))
+    selected_formats = normalize_formats(formats)
     directory = Path(directory)
     if not (directory / "effective_config.json").is_file():
         raise ValueError(
@@ -56,46 +56,23 @@ def report(directory, *, formats=None, table_profile=None):
         for model in config["models"]
         for condition in config["conditions"]
     ]
-    if table_profile:
-        from .raw_report import build_report, write_report
-
-        compatible = build_report(records, profile=table_profile)
-    rows = tables(records)[0]
-    means = _cohort_means(rows, config)
-    target = policy["target_mean_recovery"]
-    target_met = {
-        c: value >= target if value is not None and target is not None else None
-        for c, value in means.items()
-    }
-    result = dict(
-        rows=rows,
-        mean_recovery=means,
-        report_policy=policy,
-        target_met=target_met,
+    result = summarize(records, policy=policy)
+    export_records(
+        records,
+        directory,
+        formats=selected_formats,
+        table_profile=table_profile,
+        metadata={
+            "kind": "standalone_run",
+            "config_identity": object_hash(config),
+            "report_policy": policy,
+        },
+        summary=result,
     )
-    table_formats = selected_formats - {"md"}
-    if table_formats:
-        export_records(
-            records,
-            directory,
-            formats=table_formats,
-            metadata={
-                "kind": "standalone_run",
-                "config_identity": object_hash(config),
-                "report_policy": policy,
-            },
-        )
-    if "md" in selected_formats:
-        (directory / "summary.md").write_text(
-            _markdown(rows, means, target, target_met), encoding="utf-8"
-        )
-    if "json" in selected_formats:
-        atomic_json(directory / "summary.json", result)
     if table_profile:
-        write_report(
-            compatible, directory, source={"config_identity": object_hash(config)}
-        )
-        result["raw_data"] = compatible
+        from .raw_report import build_report
+
+        result["raw_data"] = build_report(records, profile=table_profile)
     return result
 
 
@@ -223,63 +200,3 @@ def _record(directory, config, status, policy, model, condition):
             current_attempt=current,
         ),
     )
-
-
-def _cohort_means(rows, config):
-    """Mean recovery per condition, only when every model has a complete matched result."""
-    baselines = {r["model"]: r for r in rows if r["condition"] == "fp32"}
-    means = {}
-    for condition in config["conditions"]:
-        selected = [r for r in rows if r["condition"] == condition]
-        complete = len(selected) == len(config["models"]) and all(
-            r["complete"]
-            and r["samples"] == r["expected_samples"]
-            and r["recovery_pct"] is not None
-            and baselines.get(r["model"], {}).get("complete", False)
-            and baselines[r["model"]]["samples"]
-            == baselines[r["model"]]["expected_samples"]
-            == r["expected_samples"]
-            for r in selected
-        )
-        means[condition] = (
-            sum(r["recovery_pct"] for r in selected) / len(selected)
-            if complete
-            else None
-        )
-    return means
-
-
-def _markdown(rows, means, target, target_met):
-    lines = [
-        "# Evaluation results",
-        "",
-        "QDQ / matched FP32 × 100; arithmetic mean with equal weight per model.",
-        "",
-        "| Model | Condition | Metric | Accuracy (%) | Recovery (%) | Samples | Complete |",
-        "|---|---|---|---:|---:|---:|---|",
-    ]
-    for r in rows:
-        ratio = "—" if r["recovery_pct"] is None else f"{r['recovery_pct']:.4f}"
-        accuracy = "—" if r["value_pct"] is None else f"{r['value_pct']:.4f}"
-        lines.append(
-            f"| {r['model']} | {r['condition']} | {r['metric']} | {accuracy} | {ratio} | {r['samples']} | {r['complete']} |"
-        )
-    lines += ["", "## Complete cohort mean", ""] + [
-        f"- {c}: {v:.4f}%"
-        if v is not None
-        else f"- {c}: incomplete / unmatched denominator"
-        for c, v in means.items()
-    ]
-    if target is not None:
-        lines += ["", f"Target mean recovery: {target:g}%", ""]
-        lines += [
-            f"- {c}: "
-            + ("not evaluated" if value is None else "met" if value else "not met")
-            for c, value in target_met.items()
-        ]
-    lines += [
-        "",
-        "These metrics describe QDQ accuracy. Integer-kernel or shift execution is not implied.",
-        "A complete local cohort does not certify equivalence to published/reference dataset bytes.",
-    ]
-    return "\n".join(lines) + "\n"

@@ -3,7 +3,15 @@
 from pathlib import Path
 
 from ._io import atomic_json
-from .results import RAW_FIELDS, SUCCESS, raw_export_row, table_text, tables, _text
+from .results import (
+    RAW_FIELDS,
+    SUCCESS,
+    normalize_formats,
+    raw_export_row,
+    table_text,
+    tables,
+    _text,
+)
 
 TABLE_PROFILES = ("opennpu_raw",)
 MODEL_NAMES = {
@@ -145,16 +153,19 @@ def build_report(records, *, profile="opennpu_raw"):
     )
 
 
-def write_report(report, directory, *, source=None):
+def write_report(report, directory, *, source=None, formats=None):
+    selected = normalize_formats(formats)
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
     for group, name in (("full", "raw_data"), ("partial", "raw_data.partial")):
-        _text(
-            directory / (name + ".csv"),
-            table_text(report[group], delimiter=","),
-            "utf-8-sig",
-        )
-        _text(directory / (name + ".tsv"), table_text(report[group]), "utf-8")
+        if "csv" in selected:
+            _text(
+                directory / (name + ".csv"),
+                table_text(report[group], delimiter=","),
+                "utf-8-sig",
+            )
+        if "tsv" in selected:
+            _text(directory / (name + ".tsv"), table_text(report[group]), "utf-8")
     metadata = dict(report["metadata"], source=source or {})
     atomic_json(directory / "raw_data.metadata.json", metadata)
     return metadata["counts"]

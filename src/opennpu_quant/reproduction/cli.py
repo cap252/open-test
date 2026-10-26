@@ -17,6 +17,7 @@ def sample_limit(value):
 
 def add_parser(subparsers):
     from .assets import MODEL_SETS
+    from ..cli import _add_report_options
 
     root = subparsers.add_parser(
         "reproduce",
@@ -84,9 +85,7 @@ def add_parser(subparsers):
     )
     report.add_argument("--run", required=True)
     report.add_argument("--package", required=True)
-    report.add_argument(
-        "--table-profile", choices=("opennpu_raw",), default="opennpu_raw"
-    )
+    _add_report_options(report)
     for parser in (prepare, run, compare, configs, report):
         if parser in (prepare, configs):
             parser.add_argument(
@@ -137,6 +136,8 @@ def handle(args):
         "report": ("run", "package", "output", "table_profile"),
     }
     kwargs = {k: getattr(args, k) for k in keys[args.reproduce_command]}
+    if args.reproduce_command == "report":
+        kwargs["formats"] = args.format
     for key in ("models", "conditions"):
         value = getattr(args, key)
         kwargs[key] = (

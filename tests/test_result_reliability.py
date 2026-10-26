@@ -123,6 +123,33 @@ def fixture(root, *, external=False, host=None):
 
 
 class ResultReliabilityTests(unittest.TestCase):
+    def test_report_format_changes_reuse_completed_measurements(self):
+        with tempfile.TemporaryDirectory() as temp:
+            paths, config = fixture(Path(temp))
+            run(config, paths)
+            output = paths.runs / config["name"]
+            measured = {p: p.read_bytes() for p in output.rglob("result.json")}
+            with (
+                patch(
+                    "opennpu_quant.runner.quantize",
+                    side_effect=AssertionError("unexpected quantization"),
+                ),
+                patch(
+                    "opennpu_quant.runner.evaluate",
+                    side_effect=AssertionError("unexpected inference"),
+                ),
+            ):
+                run(config, paths, formats="tsv", table_profile="opennpu_raw")
+            self.assertEqual(measured, {p: p.read_bytes() for p in measured})
+            conditions = read_json(output / "status.json")["models"]["toy"][
+                "conditions"
+            ]
+            self.assertTrue(all(r["state"] == "reused" for r in conditions.values()))
+            self.assertTrue((output / "raw_data.tsv").is_file())
+            self.assertFalse((output / "raw_data.csv").exists())
+            self.assertTrue((output / "results.csv").is_file())
+            self.assertFalse((output / "accuracy.csv").exists())
+
     def test_f01_failed_force_does_not_complete_old_quantized_result(self):
         with tempfile.TemporaryDirectory() as temp:
             paths, config = fixture(Path(temp))

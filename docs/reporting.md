@@ -1,6 +1,6 @@
 # Reports and Excel export
 
-Report commands turn saved evaluations into tables. They check the provenance and completion evidence of each result, and they never run inference, calibration or training. `run` already writes its default reports, so use these commands to add the Excel-compatible tables or to rebuild reports later.
+Report commands turn saved evaluations into tables. They check the provenance and completion evidence of each result, and they never run inference, calibration or training. `run` already writes its default reports, so use these commands to select a table format or rebuild reports later.
 
 ## Choose a report command
 
@@ -21,17 +21,30 @@ opennpu-quant reproduce report --run workspace/repro/resnet18-3-run \
 
 The [code map](architecture.md#from-saved-evaluations-to-tables) shows how the three commands share one implementation.
 
-By default, `run` and `report` write the 15-column `accuracy.csv` and `results.csv` with internal names. `--table-profile opennpu_raw` adds the Excel-compatible `raw_data.*` tables described below, with display names, a full/partial split and metadata. It is optional for `report` and `results` and the default for `reproduce report`. With `results`, the option also requires `--output`, so that the full and partial tables and their metadata stay together. With `--stdout csv` or `--stdout tsv` and this profile, stdout shows only the full-evaluation table, and partial rows stay in the files.
+`run`, `report`, `results` and `reproduce report` use the same output options. The default is `--format csv,json`: CSV tables and JSON records. Use `--format csv` for tables only, or select `tsv` and `md` explicitly. `results --format` requires `--output`. No XLSX file is generated.
+
+`--table-profile opennpu_raw` is optional for all four commands. It replaces the primary table with the full/partial tables below, using display names that match the workbook. With `results`, this option requires `--output`. With `--stdout csv` or `--stdout tsv` and this profile, stdout shows only the full-evaluation table.
 
 ## Output files
 
+| Default file | Contents |
+|---|---|
+| `results.csv` | The 15-column primary table. The duplicate `accuracy.*` files are no longer generated |
+| `metrics.csv` | One row per metric, including auxiliary metrics |
+| `records.json` | Detailed measurement records, usable by `results` without the original run directory |
+| `summary.json` | Per-condition results and complete-cohort recovery means |
+
+With `--table-profile opennpu_raw`, these files replace `results.csv`:
+
 | File | Contents |
 |---|---|
-| `raw_data.csv`, `raw_data.tsv` | Verified full evaluations: `full_evaluation` and `complete` are true and the sample count equals the full expected count |
-| `raw_data.partial.csv`, `raw_data.partial.tsv` | Valid metrics from evaluations that do not meet the full-evaluation requirements, such as `--limit` runs |
-| `raw_data.metadata.json` | Model, condition and run IDs, settings, evaluation identity, counts, units and views, provenance, row locations, and pairing and exclusion reasons |
+| `raw_data.csv` | Verified full evaluations: `full_evaluation` and `complete` are true and the sample count equals the full expected count |
+| `raw_data.partial.csv` | Valid metrics from evaluations that do not meet the full-evaluation requirements, such as `--limit` runs |
+| `raw_data.metadata.json` | Provenance, row locations, and pairing and exclusion reasons. Always retained with this profile |
 
-Every file gets its header, even when a group is empty. CSV uses UTF-8 with a BOM, and TSV uses plain UTF-8. `reproduce report` accepts `--models` and `--conditions` to restrict the selection. If a condition is missing from the tables, look up its reason in `raw_data.metadata.json`.
+`--format tsv` writes TSV tables instead of CSV, `json` writes the two JSON reports, and `md` writes `summary.md`. Formats can be combined. Empty tables retain their headers. CSV uses UTF-8 with a BOM, and TSV uses plain UTF-8.
+
+`reproduce report` also accepts `--models` and `--conditions`. If a condition is missing from the profile tables, look up its reason in `raw_data.metadata.json`. Existing files in unselected formats are preserved. Use a new report directory for a clean output set.
 
 ## The 15-column table
 
@@ -83,7 +96,7 @@ Without a compatible FP32 result, the denominator and recovery stay blank, and t
 
 Reports use only the current result's `metrics` and `metric_units`. They never copy the original `measurement.metrics`, fill missing values with zero or borrow FP32 from another run directory. A current measurement that differs from the original is reported as measured.
 
-In `run`, the summary also shows a cohort mean per condition over the measured models. The mean is computed only when every configured model has a full evaluation with a matching FP32 result, so partial runs show `mean_recovery: null` even though each row has its own recovery. Without a measured model, the mean stays empty.
+The summary shows a cohort mean per condition over the selected models in one run. The mean is computed only when every selected model has a full evaluation with a matching FP32 result, so partial runs show `mean_recovery: null` even though each row has its own recovery. Records from separate runs are not averaged together.
 
 For LFW, `view_count` records the actual input views. `run` stores `samples` as views, so the metadata adds `sample_unit: views` and the evaluator's `pair_count`. `reproduce` stores `samples` as pairs and records the views separately ([LFW](models-and-data.md#lfw)).
 

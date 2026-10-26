@@ -199,7 +199,7 @@ class CliUsabilityTests(unittest.TestCase):
             "1 / 2",
             "partial",
             "not aggregated",
-            "summary.md",
+            str(paths.runs / config["name"]),
         ):
             self.assertIn(label, out)
         saved = read_json(paths.runs / config["name"] / "summary.json")
@@ -221,6 +221,29 @@ class CliUsabilityTests(unittest.TestCase):
             ):
                 self.assertEqual(before[key], after[key])
         self.assertEqual(saved["mean_recovery"], payload["mean_recovery"])
+
+    def test_run_report_format_only_changes_saved_reports(self):
+        from tests.test_result_reliability import fixture
+
+        paths, config = fixture(self.root / "assets")
+        args = ["run", "-c", self.config_file(config), "--home", str(paths.home)]
+        code, _, error = self.invoke(
+            [*args, "--format", "csv", "--table-profile", "opennpu_raw"]
+        )
+        self.assertEqual(0, code, error)
+        output = paths.runs / config["name"]
+        self.assertTrue((output / "raw_data.csv").exists())
+        self.assertFalse((output / "records.json").exists())
+        self.assertFalse((output / "summary.md").exists())
+        self.assertFalse((output / "raw_data.tsv").exists())
+        with patch(
+            "opennpu_quant.runner.evaluate",
+            side_effect=AssertionError("unexpected inference"),
+        ):
+            code, _, error = self.invoke([*args, "--format", "json,md"])
+        self.assertEqual(0, code, error)
+        self.assertTrue((output / "records.json").exists())
+        self.assertTrue((output / "summary.md").exists())
 
     def test_json_summary_sends_runner_progress_to_stderr(self):
         def measured(*args, **kwargs):

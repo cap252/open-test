@@ -261,6 +261,7 @@ class ReproductionModelSetTests(unittest.TestCase):
                 run=self.root / "run",
                 package=self.root / "prepared",
                 output=self.root / "tables",
+                table_profile="opennpu_raw",
             )
             self.assertEqual(3, table["full"])
             self.assertEqual(0, table["excluded"])

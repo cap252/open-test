@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from .._io import object_hash, sha256
-from ..results import export_records, metric_values, normalize_scheme
+from ..results import export_records, metric_values, normalize_scheme, normalize_formats
 from ..raw_report import build_report, validate_profile
 from .assets import checked_file, selected, unseal
 
@@ -175,9 +175,18 @@ def _record(row, state, prepared, saved, run, run_id):
 
 
 def report(
-    *, run, package, output, table_profile="opennpu_raw", models=None, conditions=None
+    *,
+    run,
+    package,
+    output,
+    formats=None,
+    table_profile=None,
+    models=None,
+    conditions=None,
 ):
-    validate_profile(table_profile)
+    formats = normalize_formats(formats)
+    if table_profile is not None:
+        validate_profile(table_profile)
     run, package = Path(run), Path(package)
     prepared = unseal(package / "manifest.json")
     saved = unseal(run / "run.json")
@@ -216,8 +225,12 @@ def report(
         selection_identity=prepared["selection_identity"],
         verification="sealed evaluation metadata; no inference or external model reads",
     )
-    export_records(records, output, metadata=source, table_profile=table_profile)
+    export_records(
+        records, output, metadata=source, formats=formats, table_profile=table_profile
+    )
     return dict(
         output=str(output),
-        **build_report(records, profile=table_profile)["metadata"]["counts"],
+        **build_report(records, profile=table_profile or "opennpu_raw")["metadata"][
+            "counts"
+        ],
     )

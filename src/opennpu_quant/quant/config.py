@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass, field
+import math
 
 ACTIVATION_SCALE_POLICIES = ("float", "pot_nearest", "pot_ceil")
 WEIGHT_SCALE_POLICIES = (*ACTIVATION_SCALE_POLICIES, "pot_mse")
@@ -53,10 +54,18 @@ class CalibrationConfig:
         if self.method not in ("MinMax", "Percentile", "Entropy"):
             raise ValueError("Unsupported calibration method")
         if self.method == "Percentile":
-            if self.percentile_value is None or not 0 < self.percentile_value <= 100:
+            if (
+                isinstance(self.percentile_value, bool)
+                or not isinstance(self.percentile_value, (int, float))
+                or not 0 < self.percentile_value <= 100
+                or not math.isfinite(self.percentile_value)
+            ):
                 raise ValueError("Percentile must be in (0, 100]")
         elif self.percentile_value is not None:
             raise ValueError("percentile_value is only valid for Percentile")
+        for key in ("histogram_bins", "quantized_bins"):
+            if type(getattr(self, key)) is not int:
+                raise ValueError(f"{key} must be an integer")
         if (
             self.histogram_bins < 2
             or not 2 <= self.quantized_bins <= self.histogram_bins
@@ -100,6 +109,9 @@ class AdaroundConfig:
         GPU index comes from OrtConfig, not a 'cuda:N' value here.
     atol, rtol : float
         Nonnegative local-operation parity bounds, defaults 1e-5 and 1e-4.
+    validation : str
+        Strict by default. Functional smoke records finite numerical mismatches
+        in each layer audit; shapes and dtypes must still match.
         All floating settings must be finite. Do not loosen bounds to hide failures.
 
     Examples
@@ -123,10 +135,10 @@ class AdaroundConfig:
     device: str = "auto"
     atol: float = 1e-5
     rtol: float = 1e-4
+    validation: str = "strict"
 
     def __post_init__(self):
-        import math
-
+        # Messages name the field; experiment validation prefixes "adaround.".
         for key in (
             "steps",
             "batch_size",
@@ -135,35 +147,38 @@ class AdaroundConfig:
             "window_steps",
         ):
             if type(getattr(self, key)) is not int or getattr(self, key) < 1:
-                raise ValueError("AdaRound requires a positive integer: " + key)
+                raise ValueError(f"{key} must be an integer >= 1")
         if type(self.seed) is not int or self.seed < 0:
-            raise ValueError("AdaRound seed must be a nonnegative integer")
-        values = (
-            self.learning_rate,
-            self.regularization,
-            self.beta_start,
-            self.beta_end,
-            self.warmup_fraction,
-            self.atol,
-            self.rtol,
-        )
-        if not all(math.isfinite(v) for v in values):
-            raise ValueError("Nonfinite AdaRound configuration")
-        if (
-            self.learning_rate <= 0
-            or self.regularization < 0
-            or not 0 <= self.warmup_fraction < 1
+            raise ValueError("seed must be an integer >= 0")
+        for key in (
+            "learning_rate",
+            "regularization",
+            "beta_start",
+            "beta_end",
+            "warmup_fraction",
+            "atol",
+            "rtol",
         ):
-            raise ValueError("Invalid AdaRound learning/loss policy")
-        if (
-            self.beta_start < self.beta_end
-            or self.beta_end <= 0
-            or self.atol < 0
-            or self.rtol < 0
-        ):
-            raise ValueError("Invalid AdaRound beta/parity policy")
+            value = getattr(self, key)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+            ):
+                raise ValueError(f"{key} must be a finite number")
+        if self.learning_rate <= 0:
+            raise ValueError("learning_rate must be > 0")
+        if not 0 <= self.warmup_fraction < 1:
+            raise ValueError("warmup_fraction must be in [0, 1)")
+        for key in ("regularization", "atol", "rtol"):
+            if getattr(self, key) < 0:
+                raise ValueError(f"{key} must be >= 0")
+        if not self.beta_start >= self.beta_end > 0:
+            raise ValueError("beta_start must be >= beta_end > 0")
+        if self.validation not in ("strict", "functional"):
+            raise ValueError("validation must be strict or functional")
         if self.device not in ("auto", "cpu", "cuda"):
-            raise ValueError("AdaRound device must be auto/cpu/cuda")
+            raise ValueError("device must be auto, cpu or cuda")
 
     def to_dict(self):
         return asdict(self)
@@ -181,21 +196,21 @@ class AdaroundConfig:
 
 @dataclass(frozen=True)
 class QuantizationConfig:
-    """Immutable explicit INT8 QDQ policy; defaults preserve the basic API path.
+    """Immutable INT8 QDQ policy with the same defaults as Scheme().
 
     Attributes
     ----------
     activation_precision, weight_precision : QuantPrecision
         Signed 8-bit only; defaults instantiate that supported precision.
     activation_symmetric, weight_symmetric : bool
-        Both default True; asymmetric activation is supported, weights stay symmetric.
+        Activation defaults False and weight True; weights stay symmetric.
     activation_granularity, weight_granularity : str
-        Activation is 'per_tensor'; weight is 'per_tensor' (default) or 'per_channel'.
+        Activation is 'per_tensor'; weight is 'per_channel' (default) or 'per_tensor'.
     scope, representation : str
-        Scope is 'basic' (default) or 'all'; representation is 'QDQ'.
+        Scope is 'all' (default) or 'basic'; representation is 'QDQ'.
     calibration : CalibrationConfig
-        Defaults to MinMax. Scheme() instead defaults to all-scope asymmetric
-        activation, per-channel weights and Percentile; defaults are not unified.
+        Defaults to Percentile 99.99, matching Scheme(). Pass CalibrationConfig()
+        explicitly for MinMax range selection.
     activation_scale_policy, weight_scale_policy : str
         'float' (default), 'pot_nearest' or 'pot_ceil'; weight also allows 'pot_mse'.
     adaround : AdaroundConfig or None
@@ -215,13 +230,15 @@ class QuantizationConfig:
 
     activation_precision: QuantPrecision = field(default_factory=QuantPrecision)
     weight_precision: QuantPrecision = field(default_factory=QuantPrecision)
-    activation_symmetric: bool = True
+    activation_symmetric: bool = False
     weight_symmetric: bool = True
     activation_granularity: str = "per_tensor"
-    weight_granularity: str = "per_tensor"
-    scope: str = "basic"
+    weight_granularity: str = "per_channel"
+    scope: str = "all"
     representation: str = "QDQ"
-    calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
+    calibration: CalibrationConfig = field(
+        default_factory=lambda: CalibrationConfig.percentile(99.99)
+    )
     activation_scale_policy: str = "float"
     weight_scale_policy: str = "float"
     adaround: AdaroundConfig | None = None
@@ -229,6 +246,11 @@ class QuantizationConfig:
 
     def __post_init__(self):
         scale_policies(vars(self))
+        for key in ("activation_symmetric", "weight_symmetric"):
+            if type(getattr(self, key)) is not bool:
+                raise ValueError(f"{key} must be boolean (true or false)")
+        if not isinstance(self.calibration, CalibrationConfig):
+            raise TypeError("calibration must be CalibrationConfig")
         if self.adaround is not None and not isinstance(self.adaround, AdaroundConfig):
             raise TypeError("adaround must be AdaroundConfig or None")
         if (
@@ -263,6 +285,7 @@ class QuantizationConfig:
         return cls(**values)
 
     def scheme(self):
+        """Flat policy dict consumed by quant.engine (not a public Scheme object)."""
         result = dict(
             scope=self.scope,
             activation_symmetric=self.activation_symmetric,

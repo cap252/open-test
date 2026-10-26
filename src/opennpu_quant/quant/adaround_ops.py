@@ -22,6 +22,10 @@ def attributes(node):
 
 
 def operation(node, x, weight, bias):
+    """Torch version of one Conv (1-3D), Gemm or MatMul node with ONNX semantics.
+
+    AdaRound differentiates through it; the caller checks parity against ORT.
+    """
     import torch
     import torch.nn.functional as F
 

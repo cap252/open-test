@@ -1,5 +1,35 @@
 opennpu-quant
 Copyright 2026 opennpu-quant contributors
 
-This package includes numerical algorithms developed in the preceding ONNX quantization research codebase, with portable execution and data adapters.
-Original model implementations, weights and datasets are acquired separately and retain their own terms. See THIRD_PARTY.md.
+This package is licensed under Apache-2.0. The following attributions apply to
+included third-party code and alignment conventions. Full license texts are
+installed under opennpu_quant/resources/licenses/.
+
+PoseNet decoding
+Source: https://github.com/rwightman/posenet-pytorch
+License: Apache-2.0 (posenet.txt)
+
+The pose_constants.py, pose_decode.py and pose_multi.py files in
+opennpu_quant/models/_vendor/ are adapted from this project. Imports, formatting
+and comments were changed; decoding arithmetic is retained.
+
+Upstream NOTICE follows. The converter and model weights are not bundled here.
+
+PoseNet Python
+Copyright 2018 Ross Wightman
+
+Posenet tfjs converter (code in posenet/converter)
+Copyright (c) 2017 Infocom TPO (https://lab.infocom.co.jp/)
+Modified (c) 2018 Ross Wightman
+
+tfjs PoseNet weights and original JS code
+Copyright 2018 Google LLC. All Rights Reserved.
+
+MobileFaceNet alignment
+Source: https://github.com/foamliu/MobileFaceNet
+License: Apache-2.0 (mobilefacenet.txt)
+
+The alignment points and 112-square crop convention follow this project.
+Network code, weights and LFW data are acquired separately.
+
+See THIRD_PARTY.md for dependency and external-asset information.

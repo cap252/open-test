@@ -57,6 +57,10 @@ def evaluate(model, samples, *, evaluator, ort=None, expected_samples=None, limi
     ort = ort or OrtConfig.cpu()
     if limit is not None and (type(limit) is not int or limit < 1):
         raise ValueError("limit must be positive")
+    if expected_samples is not None and (
+        type(expected_samples) is not int or expected_samples < 1
+    ):
+        raise ValueError("expected_samples must be a positive integer")
     session = create_session(model, ort)
     names = [v.name for v in session.get_outputs()]
     seen = set()
@@ -91,12 +95,19 @@ def evaluate(model, samples, *, evaluator, ort=None, expected_samples=None, limi
     metrics = dict(evaluator.finalize())
     if any(not np.isfinite(v) for v in metrics.values()):
         raise ValueError("Nonfinite metric")
+    runtime = dict(**environment(ort), placement=placement)
+    if hasattr(evaluator, "contract"):
+        runtime["evaluation_contract"] = evaluator.contract.identity()
+    if "CUDAExecutionProvider" in ort.providers:
+        from ..ort.cuda_libs import loaded_libraries
+
+        runtime["loaded_libraries"] = loaded_libraries()
     return EvaluationResult(
         metrics,
         len(seen),
         expected_samples is not None and len(seen) == expected_samples,
         time.monotonic() - start,
-        dict(**environment(ort), placement=placement),
+        runtime,
         deepcopy(getattr(evaluator, "metric_details", {})),
         {
             key: getattr(evaluator, "metric_units", {}).get(key, "fraction")

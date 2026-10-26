@@ -107,7 +107,9 @@ class SegmentationPredictionTests(unittest.TestCase):
             with gzip.open(saved, "rt") as stream:
                 predictions = [json.loads(line) for line in stream]
             self.assertEqual(["seg0", "seg1"], [r["id"] for r in predictions])
-            bundle = ModelBundle(ModelSpec.load(directory / "recipe.yaml"), directory)
+            bundle = ModelBundle.from_directory(
+                ModelSpec.load(directory / "recipe.yaml"), directory
+            )
             dataset = Dataset(paths.data / "voc/manifest.json")
             replay = SegmentationEvaluator(output_name="labels")
             for row, sample in zip(predictions, dataset.samples(bundle)):

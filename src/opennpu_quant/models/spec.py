@@ -16,13 +16,39 @@ class ModelSpec:
         return self.recipe["name"]
 
     @classmethod
+    def for_run(cls, name, directory, *, profile=None):
+        """Use packaged evaluation defaults with the local bundle's graph contract."""
+        from .evaluation_profiles import apply_profile, profile_name
+
+        local = Path(directory) / "recipe.yaml"
+        spec = cls.load(local if local.is_file() else name)
+        if spec.name != name:
+            raise ValueError(f"Local recipe name {spec.name!r} does not match {name!r}")
+        if profile is None and name in model_names():
+            profile = profile_name(cls.load(name).recipe)
+            previous = profile_name(spec.recipe)
+            if local.is_file() and previous != profile:
+                import warnings
+
+                warnings.warn(
+                    f"{name}: local profile {previous} is replaced by the packaged "
+                    f"default {profile}. To compare another convention, set "
+                    f"evaluation.profiles.{name} explicitly.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+        return cls(apply_profile(spec.recipe, profile)) if profile is not None else spec
+
+    @classmethod
     def load(cls, name):
         path = Path(name)
         if path.is_file():
             data = read_yaml(path)
         else:
-            if "/" in str(name) or ".." in str(name):
-                raise ValueError("Unknown model: " + str(name))
+            if str(name) not in model_names():
+                raise ValueError(
+                    f"Unknown model: {name}. Packaged models: {', '.join(model_names())}"
+                )
             data = read_yaml(
                 files("opennpu_quant.resources.models").joinpath(str(name) + ".yaml")
             )
@@ -39,14 +65,16 @@ class ModelSpec:
             "source",
             "export",
         }
-        allowed = required | {
-            "outputs",
-            "network_outputs",
-            "network_input_map",
-            "metric_params",
-        }
-        if not isinstance(data, dict) or set(data) - allowed or required - set(data):
-            raise ValueError("Invalid model recipe keys")
+        allowed = required | {"network_input_map"}
+        if not isinstance(data, dict):
+            raise ValueError(f"Model recipe must be a mapping: {name}")
+        missing, unknown = required - set(data), set(data) - allowed
+        if missing or unknown:
+            _reject_removed_settings(data)
+            raise ValueError(
+                f"Invalid model recipe keys in {name}: "
+                f"missing {sorted(missing)}, unknown {sorted(map(str, unknown))}"
+            )
         if (
             set(data["graphs"]) - {"network", "preprocess", "postprocess"}
             or "network" not in data["graphs"]
@@ -66,97 +94,92 @@ def model_names():
     )
 
 
-def validate_framework_policy(recipe):
-    policy = recipe.get("export", {}).get("framework_parity", {})
-    if not isinstance(policy, dict):
-        raise ValueError("framework_parity must be a mapping")
-    for name, expected in (("rtol", 1e-4), ("atol", 1e-5)):
-        if policy.get(name, expected) != expected:
-            raise ValueError(
-                "Frozen framework parity requires " + name + "=" + str(expected)
-            )
-    if (
-        recipe.get("task") == "classification"
-        and policy.get("require_top5_order", True) is not True
-    ):
-        raise ValueError("Classification framework parity requires Top5 order")
+# Built-in preprocessing kinds that fix the network input layout.
+PREPROCESS_LAYOUT = {
+    "center_crop": "NCHW",
+    "letterbox": "NCHW",
+    "resize_bgr_mean": "NCHW",
+    "resize_uint8": "NHWC",
+    **dict.fromkeys(
+        (
+            "resize_normalize",
+            "nanodet",
+            "posenet",
+            "unet_letterbox",
+            "mmseg_resize",
+            "yolox",
+            "letterbox_dynamic",
+            "aligned_face",
+        ),
+        "NCHW",
+    ),
+}
+
+
+def _reject_removed_settings(recipe):
+    """Reject removed keys without restricting plugin-owned preprocessing settings."""
+    paths = [
+        "outputs",
+        "network_outputs",
+        "metric_params",
+        "input.dtype",
+        "export.framework_parity.rtol",
+        "export.framework_parity.atol",
+        "export.framework_parity.require_top5_order",
+    ]
+    kind = recipe.get("preprocess", {}).get("kind")
+    if kind in ("resize_uint8", "resize_bgr_mean"):
+        paths.append("preprocess.interpolation")
+    elif kind == "longer_side_pad":
+        paths.append("preprocess.pad")
+    decode_keys = {
+        "retinaface": ("record", "rescale", "priors.clip"),
+        "tf_od_api": ("boxes_to",),
+        "yolo": (
+            "score",
+            "boxes",
+            "category_ids",
+            "nms.impl",
+            "nms.per_class",
+            "nms.score_threshold",
+        ),
+    }
+    paths.extend(
+        "decode." + key
+        for key in decode_keys.get(recipe.get("decode", {}).get("kind"), ())
+    )
+    removed = []
+    for path in sorted(paths):
+        node = recipe
+        for key in path.split("."):
+            if not isinstance(node, dict) or key not in node:
+                break
+            node = node[key]
+        else:
+            removed.append(path)
+    if removed:
+        raise ValueError(
+            "Unknown setting(s): "
+            + ", ".join(removed)
+            + ". Remove these keys; their behavior is fixed or the setting is no longer supported."
+        )
 
 
 def validate_recipe_policy(recipe):
-    """Reject edits to descriptive fields whose runtime behavior is fixed."""
-    validate_framework_policy(recipe)
-    # Explicit network boundaries must agree across recipe sections.
-    split = recipe.get("export", {}).get("split", {})
-    if (
-        recipe.get("export", {}).get("family") != "tf_ssd"
-        and "network_outputs" in recipe
-        and "network_outputs" in split
-        and recipe["network_outputs"] != split["network_outputs"]
-    ):
-        raise ValueError(
-            "Conflicting network_outputs; use export.split.network_outputs"
-        )
-    pre = recipe.get("preprocess", {})
-    decode = recipe.get("decode", {})
-    inputs = recipe.get("input", {})
+    """Check that recipe settings agree with each other and with the preprocessing."""
+    _reject_removed_settings(recipe)
+    from .evaluation_profiles import profile_name
 
-    def fixed(settings, key, expected, label):
-        if key in settings and (
-            settings[key] != expected
-            or (isinstance(expected, bool) and type(settings[key]) is not bool)
-        ):
-            raise ValueError("Unsupported fixed recipe policy: " + label + "." + key)
-
-    kind = pre.get("kind")
-    if kind in (
-        "center_crop",
-        "letterbox",
-        "resize_uint8",
-        "resize_bgr_mean",
-        "longer_side_pad",
-    ):
-        fixed(
-            inputs, "dtype", "uint8" if kind == "resize_uint8" else "float32", "input"
-        )
-        if kind != "longer_side_pad":
-            fixed(
-                inputs, "layout", "NHWC" if kind == "resize_uint8" else "NCHW", "input"
-            )
-        elif inputs.get("layout", "NCHW") not in ("NCHW", "NHWC"):
-            raise ValueError("Unsupported input layout")
-    if kind in ("resize_uint8", "resize_bgr_mean"):
-        fixed(pre, "interpolation", "cv2_linear", "preprocess")
-    if kind == "longer_side_pad":
-        fixed(pre, "pad", "zeros_bottom_right", "preprocess")
-    if decode.get("kind") == "tf_od_api":
-        fixed(decode, "boxes_to", "clip_xywh", "decode")
-    if decode.get("kind") == "retinaface":
-        fixed(decode.get("priors", {}), "clip", False, "decode.priors")
-        fixed(decode, "rescale", "per_axis_clip", "decode")
-        fixed(decode, "record", "wider_int_xywh", "decode")
-    if decode.get("kind") == "yolo":
-        for key, value in (
-            ("score", "obj_x_cls"),
-            ("boxes", "unletterbox_clip_xywh"),
-            ("category_ids", "coco_sorted"),
-        ):
-            fixed(decode, key, value, "decode")
-        for key, value in (
-            ("impl", "cv2.dnn.NMSBoxes"),
-            ("per_class", True),
-            ("score_threshold", 0.0),
-        ):
-            fixed(decode.get("nms", {}), key, value, "decode.nms")
-    params = recipe.get("metric_params", {})
-    expected = {
-        "segmentation_labels": {"classes": 21, "ignore_label": 255},
-        "retinaface": {"iou": 0.5, "thresholds": 1000, "setting": "medium"},
-    }.get(decode.get("kind"))
-    if expected is not None:
-        if not isinstance(params, dict) or set(params) - set(expected):
-            raise ValueError("Unsupported metric_params")
-        for key, value in expected.items():
-            fixed(params, key, value, "metric_params")
+    profile_name(recipe)
+    layout = recipe.get("input", {}).get("layout")
+    if layout not in ("NCHW", "NHWC"):
+        raise ValueError("Recipe input.layout must be NCHW or NHWC")
+    kind = recipe.get("preprocess", {}).get("kind")
+    expected = PREPROCESS_LAYOUT.get(kind)
+    if expected and layout != expected:
+        raise ValueError(f"Preprocessing {kind} produces {expected}; set input.layout")
+    if not isinstance(recipe.get("export", {}).get("framework_parity", {}), dict):
+        raise ValueError("export.framework_parity must be a mapping")
     if recipe.get("export", {}).get("family") == "tf_deeplab":
         for key in ("graph_input", "graph_output"):
             value = recipe["export"].get(key)

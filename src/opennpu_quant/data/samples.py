@@ -1,6 +1,8 @@
 from pathlib import Path
+from .._identity import ORT_CODE, source_hashes
 from .._io import read_json, object_hash, sha256
 from ..models.contracts import EvaluationSample
+from .lfw_protocol import require_full
 
 
 def preprocessing_implementation(settings):
@@ -14,13 +16,14 @@ def preprocessing_implementation(settings):
     import cv2
     import numpy
     import PIL
-    from ..models import preprocess, bundle
+    from ..models import preprocess, bundle, extended_preprocess
 
     return dict(
         files={
             "preprocess": sha256(preprocess.__file__),
             "bundle": sha256(bundle.__file__),
             "dataset": sha256(__file__),
+            "extended_preprocess": sha256(extended_preprocess.__file__),
         },
         dependencies={
             "numpy": numpy.__version__,
@@ -31,6 +34,12 @@ def preprocessing_implementation(settings):
 
 
 class Dataset:
+    """A prepared dataset manifest: yields evaluation samples and calibration feeds.
+
+    Evaluation reads info, annotations, identity() and samples(). Reproduce's frozen
+    LFW cache provides the same members.
+    """
+
     def __init__(self, manifest, *, root=None):
         self.manifest = Path(manifest)
         self.info = read_json(self.manifest)
@@ -40,6 +49,10 @@ class Dataset:
             k: self.path(v) for k, v in self.info.get("annotations", {}).items()
         }
         self.annotation_identity = {k: sha256(v) for k, v in self.annotations.items()}
+        if self.dataset == "lfw_mobilefacenet":
+            from .lfw import validate_manifest
+
+            validate_manifest(self.info, self.root)
 
     def path(self, relative):
         p = (self.root / relative).resolve()
@@ -47,12 +60,19 @@ class Dataset:
             raise ValueError("Dataset path escapes root")
         return p
 
-    def rows(self, split):
+    def rows(self, split, limit=None):
         rows = self.info[split]
         ids = [str(x["id"]) for x in rows]
         if len(ids) != len(set(ids)):
             raise ValueError("Duplicate dataset IDs")
-        return rows
+        if limit is None:
+            return rows
+        if split == "validation" and "evaluation_pairs" in self.info:
+            require_full(self.info, limit)
+            pairs = self.info["evaluation_pairs"][:limit]
+            keys = {p[k] for p in pairs for k in ("first", "second")}
+            return [r for r in rows if r["image_key"] in keys]
+        return rows[:limit]
 
     def identity(self, split, limit=None):
         # Root location is excluded. Detect content/annotation changes before reuse.
@@ -60,6 +80,11 @@ class Dataset:
             [
                 self.dataset,
                 self.annotation_identity,
+                {
+                    k: self.info[k]
+                    for k in ("evaluation_pairs", "smoke")
+                    if k in self.info
+                },
                 [
                     (
                         r,
@@ -68,7 +93,7 @@ class Dataset:
                         if isinstance(r.get("target"), str)
                         else None,
                     )
-                    for r in self.rows(split)[:limit]
+                    for r in self.rows(split, limit)
                 ],
             ]
         )
@@ -79,13 +104,15 @@ class Dataset:
         import numpy as np
 
         recipe = bundle.spec.recipe
-        for row in self.rows(split)[:limit]:
+        for row in self.rows(split, limit):
             with Image.open(self.path(row["path"])) as image:
+                if recipe["task"] == "face_verification" and row.get("flip") == 1:
+                    image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
                 tensor, meta = preprocess(
                     image, recipe["preprocess"], recipe["input"]["layout"]
                 )
             feeds, meta = bundle.prepare(tensor, meta)
-            target = row.get("target")
+            target = meta.pop("target", row.get("target"))
             if recipe["task"] == "segmentation" and target is not None:
                 with Image.open(self.path(target)) as image:
                     target = np.asarray(image).copy()
@@ -108,6 +135,11 @@ class Dataset:
         from ..ort.session import environment
         from .feed_cache import prepare_feed_cache
 
+        if any(not isinstance(d, int) for d in bundle.spec.recipe["input"]["shape"]):
+            from .variable_cache import (
+                prepare_variable_feed_cache as prepare_feed_cache,
+            )
+
         implementation = preprocessing_implementation(bundle.spec.recipe["preprocess"])
         if implementation is None:
             raise ValueError(
@@ -118,6 +150,8 @@ class Dataset:
         source = self.identity("calibration", count)
         pre = bundle.paths.get("preprocess")
         pre_identity = model_identity(pre) if pre else None
+        # The CPU preprocessing graph runs through the ORT session and fetch code.
+        pre_code = source_hashes(*ORT_CODE) if pre else None
         network = load_model(bundle.paths["network"])
         inputs = [value.SerializeToString().hex() for value in network.graph.input]
         del network
@@ -131,7 +165,9 @@ class Dataset:
             preprocess_graph=pre_identity,
             implementation=implementation,
             environment={
-                "cpu_preprocess": environment(OrtConfig.cpu()) if pre else None,
+                "cpu_preprocess": dict(environment(OrtConfig.cpu()), code=pre_code)
+                if pre
+                else None,
             },
         )
 
@@ -164,6 +200,8 @@ class Dataset:
                 raise ValueError("Calibration source/order changed")
             if pre and model_identity(pre) != pre_identity:
                 raise ValueError("CPU preprocessing graph changed")
+            if pre and source_hashes(*ORT_CODE) != pre_code:
+                raise ValueError("CPU preprocessing runtime code changed")
 
         return prepare_feed_cache(
             Path(directory) / object_hash(identity),

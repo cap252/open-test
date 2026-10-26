@@ -4,7 +4,8 @@ from ..graph.partition import extract, rename_input
 from ..ort.session import create_session
 from ..ort.config import OrtConfig
 from ..ort.fetch import run_tensors
-from ..models.spec import validate_framework_policy
+from .contract import validate_parts
+from .parity import framework_compare as framework_compare, validate_framework
 
 
 def compare(expected, actual):
@@ -32,24 +33,53 @@ def outputs(model, feeds):
     return [dict(zip(names, run_tensors(session, names, feed))) for feed in feeds]
 
 
-def finalize(raw, recipe, feeds, references, destination):
+def finalize(raw, recipe, feeds, references, destination, *, validation="strict"):
+    if validation not in ("strict", "functional"):
+        raise ValueError("Unknown export validation mode")
+    if not feeds or len(feeds) != len(references):
+        raise ValueError("Export requires one framework reference per input fixture")
     model = onnx.load(raw)
     onnx.checker.check_model(model, full_check=True)
     raw_values = outputs(model, feeds)
     checks = [
-        dict(framework_raw=framework_compare(a, b, recipe))
-        for a, b in zip(references, raw_values)
+        dict(framework_raw=validate_framework(a, b, recipe, validation))
+        for a, b in zip(references, raw_values, strict=True)
     ]
+    transformations = {}
+    if recipe["export"].get("fold_constant_floors"):
+        from .boundaries import fold_constant_floors
+
+        model, transformations["constant_floors"] = fold_constant_floors(model)
+        if recipe["name"] == "yolov3_full":
+            from .boundaries import fold_resize_sizes
+
+            model, transformations["resize_sizes"] = fold_resize_sizes(
+                model, transformations["constant_floors"]["changes"]
+            )
+
+    if recipe["name"] == "yolov7_face":
+        from .broadcast import replace_parameter_tiles
+        from .boundaries import materialize_tensor_constants
+
+        model, transformations["broadcast"] = replace_parameter_tiles(
+            model, expected={"Add": 3, "Mul": 3}
+        )
+        model, transformations["constants"] = materialize_tensor_constants(model)
     model = onnx.shape_inference.infer_shapes(model, check_type=True)
     if recipe["export"].get("simplify", False):
         import onnxsim
 
-        model, checked = onnxsim.simplify(model, check_n=0)
+        model, checked = onnxsim.simplify(
+            model,
+            check_n=0,
+            perform_optimization=recipe["export"].get("simplify_optimization", True),
+            skipped_optimizers=recipe["export"].get("skipped_optimizers"),
+        )
         if not checked:
             raise ValueError("onnxsim validation failed")
     model = onnx.shape_inference.infer_shapes(model, check_type=True)
     values = outputs(model, feeds)
-    for check, a, b in zip(checks, raw_values, values):
+    for check, a, b in zip(checks, raw_values, values, strict=True):
         check["raw_final"] = compare(a, b)
     available = {
         v.name
@@ -58,6 +88,12 @@ def finalize(raw, recipe, feeds, references, destination):
     split = recipe["export"].get("split", {})
     boundary = split.get("network_input", "images")
     ends = split.get("network_outputs", [v.name for v in model.graph.output])
+    if recipe["export"]["family"] == "retinanet":
+        convs = [n for n in model.graph.node if n.op_type == "Conv"]
+        stems = [n for n in convs if n.name.endswith("/backbone/body/conv1/Conv")]
+        if len(stems) != 1 or stems[0] != convs[0]:
+            raise ValueError("Ambiguous RetinaNet input transform boundary")
+        boundary = stems[0].input[0]
     # tf2onnx suffix counters may differ. Resolve by verified dataflow and head semantics.
     if recipe["export"]["family"] == "tf_ssd":
         convs = [n for n in model.graph.node if n.op_type == "Conv"]
@@ -92,12 +128,26 @@ def finalize(raw, recipe, feeds, references, destination):
             for n in parts["preprocess"].graph.node
         ):
             raise ValueError("Network leaked into CPU input graph")
-    parts["network"] = rename_input(
-        extract(model, [boundary], ends), boundary, "images"
-    )
-    final_names = [v.name for v in model.graph.output]
-    if ends != final_names:
-        parts["postprocess"] = extract(model, ends, final_names)
+    if recipe["export"].get("split_detector"):
+        from .boundaries import split_detector
+
+        net, post, transformations["boundary"] = split_detector(model, recipe["name"])
+        ends = [v.name for v in net.graph.output]
+        parts["network"] = (
+            rename_input(extract(net, [boundary], ends), boundary, "images")
+            if boundary != "images"
+            else net
+        )
+        parts["postprocess"] = post
+        transformations["boundary"]["network_input_map"] = {"images": boundary}
+        final_names = [v.name for v in model.graph.output]
+    else:
+        parts["network"] = rename_input(
+            extract(model, [boundary], ends), boundary, "images"
+        )
+        final_names = [v.name for v in model.graph.output]
+        if ends != final_names:
+            parts["postprocess"] = extract(model, ends, final_names)
     if set(parts) != set(recipe["graphs"]):
         raise ValueError("Unexpected host partition topology")
     sessions = {k: create_session(v, OrtConfig.cpu()) for k, v in parts.items()}
@@ -126,6 +176,7 @@ def finalize(raw, recipe, feeds, references, destination):
         checks[i]["partition"] = compare(
             values[i], {n: context[n] for n in final_names}
         )
+    structure = validate_parts(parts, recipe["name"])
     for key, part in parts.items():
         onnx.checker.check_model(part, full_check=True)
         onnx.save_model(part, destination / recipe["graphs"][key])
@@ -137,91 +188,25 @@ def finalize(raw, recipe, feeds, references, destination):
         rtol=1e-4,
         fixture_count=len(feeds),
         state="passed",
-    )
-
-
-def framework_compare(expected, actual, recipe):
-    """Frozen, previously evaluated framework policies; raw/final and partition stay strict."""
-    validate_framework_policy(recipe)
-    policy = recipe["export"].get("framework_parity", {})
-    strict_errors = None
-    try:
-        strict_errors = compare(expected, actual)
-    except AssertionError:
-        pass
-    if recipe["task"] == "classification":
-        if set(expected) != {"logits"} or set(actual) != {"logits"}:
-            raise ValueError("Classification parity requires logits")
-        a, b = expected["logits"], actual["logits"]
-        if a.ndim != 2 or a.shape[-1] < 5:
-            raise ValueError("Classification parity requires at least five logits")
-        if not np.array_equal(
-            np.argsort(a, axis=-1)[..., -5:], np.argsort(b, axis=-1)[..., -5:]
-        ):
-            raise ValueError("Framework Top5 order differs")
-    if strict_errors is not None:
-        return dict(strict_passed=True, errors=strict_errors, policy=policy)
-    if set(expected) != set(actual):
-        raise ValueError("Framework output names differ")
-    errors = {}
-    for name, a in expected.items():
-        b = actual[name]
-        if (
-            a.dtype != b.dtype
-            or a.shape != b.shape
-            or not np.isfinite(a).all()
-            or not np.isfinite(b).all()
-        ):
-            raise ValueError("Invalid framework outputs")
-        errors[name] = float(
-            np.abs(a.astype(np.float64) - b.astype(np.float64)).max(initial=0)
-        )
-    task = recipe["task"]
-    if task in ("classification", "segmentation") and set(expected) == {"logits"}:
-        a, b = expected["logits"], actual["logits"]
-        bound = policy.get("logits_absolute_bound", 1e-5)
-        if errors["logits"] > bound:
-            raise ValueError(
-                f"Framework logits exceed frozen absolute bound {bound}: {errors}"
-            )
-        if task == "segmentation" and (
-            float((a.argmax(1) != b.argmax(1)).mean())
-            > policy["label_disagreement_fraction_limit"]
-        ):
-            raise ValueError(
-                "Framework segmentation labels exceed frozen disagreement limit"
-            )
-        np.testing.assert_allclose(a, b, atol=bound, rtol=1e-4)
-    elif task == "face":
-        for name, a in expected.items():
-            b = actual[name]
-            if np.allclose(a, b, atol=1e-5, rtol=1e-4):
-                continue
-            bound = policy.get("output_absolute_bounds", {}).get(name, 1e-5)
-            if errors[name] > bound:
-                raise ValueError("Framework face output exceeds frozen bound: " + name)
-            np.testing.assert_allclose(a, b, atol=bound, rtol=1e-4)
-    elif recipe["export"]["family"] == "yolov5":
-        a, b = expected["predictions"], actual["predictions"]
-        np.testing.assert_allclose(a[..., 4:], b[..., 4:], atol=1e-5, rtol=1e-4)
-        if not np.allclose(a[..., :4], b[..., :4], atol=1e-5, rtol=1e-4):
-            if (
-                float(np.abs(a[..., :4] - b[..., :4]).max())
-                > policy["decoded_xywh_absolute_bound"]
-            ):
-                raise ValueError("YOLO coordinate bound exceeded")
-            np.testing.assert_allclose(
-                a[..., :4],
-                b[..., :4],
-                atol=policy["decoded_xywh_absolute_bound"],
-                rtol=1e-4,
-            )
-    else:
-        compare(expected, actual)
-    return dict(
-        strict_passed=False,
-        effective_passed=True,
-        errors=errors,
-        policy=policy,
-        note="Uses the frozen original framework exception; no new tolerance relaxation",
+        mode=validation,
+        framework_parity_passed=all(
+            c["framework_raw"].get("strict_passed", False) for c in checks
+        ),
+        framework_numerical_action="record_only",
+        framework_raw_numerical_passed=all(
+            c["framework_raw"]["raw_numerical_passed"] for c in checks
+        ),
+        framework_diagnostics_state=(
+            "agreement"
+            if all(c["framework_raw"]["state"] == "agreement" for c in checks)
+            else "differences"
+        ),
+        transformations=transformations,
+        release_structure=structure,
+        execution_scope=dict(
+            framework="cpu",
+            network="cpu",
+            host="cpu",
+            gpu_network="not_checked",
+        ),
     )

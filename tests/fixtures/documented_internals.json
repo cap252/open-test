@@ -1,0 +1,8 @@
+{
+  "opennpu_quant.configuration.load_config": "(name='core10')",
+  "opennpu_quant.data.samples.Dataset": "(manifest, *, root=None)",
+  "opennpu_quant.models.adapter.ModelEvaluator": "(bundle, dataset, *, postprocess=None)",
+  "opennpu_quant.models.bundle.ModelBundle": "(spec, paths, *, manifest=None, aliases=None)",
+  "opennpu_quant.models.evaluation_contracts.resolve": "(recipe, *, postprocess=None)",
+  "opennpu_quant.models.spec.ModelSpec": "(recipe: dict) -> None"
+}

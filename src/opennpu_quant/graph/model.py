@@ -1,15 +1,43 @@
 import copy
 import hashlib
 from pathlib import Path
+from google.protobuf.message import DecodeError
 import onnx
 from onnx.external_data_helper import _get_all_tensors, convert_model_from_external_data
 from opennpu_quant._io import object_hash, sha256
+from .._protobuf import is_repeated
+
+
+def _reject_external_sparse(message):
+    # ONNX 1.17's external-data loader omits sparse values and indices.
+    if isinstance(message, onnx.SparseTensorProto):
+        if any(
+            tensor.data_location == onnx.TensorProto.EXTERNAL
+            for tensor in (message.values, message.indices)
+        ):
+            raise ValueError(
+                "External sparse ONNX tensors are not supported. "
+                "Embed their values and indices or convert to dense weights."
+            )
+        return
+    if isinstance(message, onnx.TensorProto):
+        return
+    for field, value in message.ListFields():
+        if field.type == field.TYPE_MESSAGE:
+            children = value if is_repeated(field) else (value,)
+            for child in children:
+                _reject_external_sparse(child)
 
 
 def load_model(source):
+    """Owned copy of an ONNX model with external weights inlined.
+
+    External data files must stay inside the model's folder.
+    """
     if isinstance(source, (str, Path)):
         path = Path(source).resolve()
         header = onnx.load(path, load_external_data=False)
+        _reject_external_sparse(header)
         for tensor in _get_all_tensors(header):
             if tensor.data_location == onnx.TensorProto.EXTERNAL:
                 location = dict(((v.key, v.value) for v in tensor.external_data)).get(
@@ -22,6 +50,7 @@ def load_model(source):
         model = onnx.load(path, load_external_data=True)
     elif isinstance(source, onnx.ModelProto):
         model = copy.deepcopy(source)
+        _reject_external_sparse(model)
         for tensor in _get_all_tensors(model):
             if tensor.data_location == onnx.TensorProto.EXTERNAL and (
                 not tensor.HasField("raw_data")
@@ -43,17 +72,33 @@ def model_identity(source):
     ).hexdigest()
 
 
-def bundle_identity(path):
+def external_data_files(path):
+    """Resolve referenced weight files without loading their tensor contents."""
     path = Path(path).resolve()
-    model = onnx.load(path, load_external_data=False)
-    rows = {path.name: sha256(path)}
+    try:
+        model = onnx.load(path, load_external_data=False)
+    except DecodeError as error:
+        raise ValueError("Invalid ONNX graph: " + str(path)) from error
+    _reject_external_sparse(model)
+    rows = {}
     for tensor in _get_all_tensors(model):
         if tensor.data_location == onnx.TensorProto.EXTERNAL:
-            name = dict(((v.key, v.value) for v in tensor.external_data))["location"]
+            name = dict((v.key, v.value) for v in tensor.external_data).get("location")
+            if not name or Path(name).is_absolute():
+                raise ValueError("External data must use a relative bundle path")
             child = (path.parent / name).resolve()
             if not child.is_relative_to(path.parent):
                 raise ValueError("External data escapes bundle")
-            rows[name] = sha256(child)
+            rows[name] = child
+    return rows
+
+
+def bundle_identity(path):
+    path = Path(path).resolve()
+    rows = {path.name: sha256(path)}
+    rows.update(
+        {name: sha256(child) for name, child in external_data_files(path).items()}
+    )
     return {"identity": object_hash(rows), "files": rows}
 
 

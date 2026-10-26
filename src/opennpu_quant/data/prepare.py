@@ -3,7 +3,13 @@ from importlib.resources import files
 import random, re
 from .._io import atomic_json, read_json, sha256
 
-COUNTS = {"imagenet": 50000, "coco": 5000, "widerface": 3226, "voc": 1449}
+COUNTS = {
+    "imagenet": 50000,
+    "coco": 5000,
+    "widerface": 3226,
+    "voc": 1449,
+    "coco_keypoints": 5000,
+}
 
 
 def identifiers(name):
@@ -18,21 +24,39 @@ def identifiers(name):
 
 
 def prepare(name, root, destination, *, source="folder", download=False):
+    """Write a manifest listing calibration and validation images; images are not copied.
+
+    Checks expected counts, paths, labels and that calibration and validation images
+    do not overlap (by content hash). LFW writes aligned crops for all 6000 pairs.
+    """
     root = Path(root).expanduser().resolve()
     destination = Path(destination)
+    if name == "lfw_mobilefacenet":
+        from .lfw import prepare_lfw
+
+        return prepare_lfw(root, destination, download=download)
     if name not in COUNTS:
         raise ValueError("Unknown dataset")
     if download:
-        if name != "imagenet" or source != "hf":
-            raise ValueError(
-                "Automatic download is currently available for ImageNet HF; use documented official archives for this dataset"
+        if name in ("coco", "coco_keypoints", "voc"):
+            from .download import download_dataset
+
+            download_dataset(
+                name, root, calibration=identifiers(name), expected_samples=COUNTS[name]
             )
-        download_imagenet(root)
+        elif name == "imagenet" and source == "hf":
+            download_imagenet(root)
+        else:
+            raise ValueError(
+                "--download supports COCO, COCO keypoints, VOC2012, LFW and "
+                "ImageNet with --source hf; prepare other datasets from local files"
+            )
     annotations = {}
     # Dataset byte equivalence requires independent verification, not matching names.
     reference = False
     if name == "imagenet":
         if source == "hf" or (root / "validation_images").is_dir():
+            source = "hf"  # record the layout actually used
             validation = []
             for path in sorted((root / "validation_images").glob("*.jpg")):
                 match = re.fullmatch(r"img_(\d+)_label_(\d+)\.jpg", path.name)
@@ -92,8 +116,12 @@ def prepare(name, root, destination, *, source="folder", download=False):
             validation = listing(val)
             training = listing(train)
             calibration = random.Random(20260917).sample(training, 1000)
-    elif name == "coco":
-        annotation = "annotations/instances_val2017.json"
+    elif name in ("coco", "coco_keypoints"):
+        annotation = "annotations/" + (
+            "person_keypoints_val2017.json"
+            if name == "coco_keypoints"
+            else "instances_val2017.json"
+        )
         doc = read_json(root / annotation)
         annotations["coco"] = annotation
         validation = [
@@ -102,7 +130,9 @@ def prepare(name, root, destination, *, source="folder", download=False):
         ]
         calibration = [
             dict(id=int(row[0]), path=f"train2017/{int(row[0]):012d}.jpg")
-            for row in identifiers(name)
+            for row in identifiers(
+                "coco_keypoints" if name == "coco_keypoints" else "coco"
+            )
         ]
     elif name == "voc":
         names = (root / "ImageSets/Segmentation/val.txt").read_text().split()
@@ -115,10 +145,7 @@ def prepare(name, root, destination, *, source="folder", download=False):
         ]
         annotations["split"] = "ImageSets/Segmentation/val.txt"
     else:
-        # Conversion output lives next to this manifest; keep source dataset untouched.
         truth = wider_ground_truth(root)
-        target = destination.parent / "wider_ground_truth.json"
-        atomic_json(target, truth)
         validation = [
             dict(id=i, path=row["path"], truth=row) for i, row in enumerate(truth)
         ]
@@ -166,12 +193,41 @@ def prepare(name, root, destination, *, source="folder", download=False):
 
 def wider_ground_truth(root):
     from scipy.io import loadmat
+    from scipy.io.matlab import MatReadError
 
     truth = root / "eval_tools/ground_truth"
-    face = loadmat(truth / "wider_face_val.mat")
+    names = [
+        "wider_face_val.mat",
+        *(f"wider_{s}_val.mat" for s in ("easy", "medium", "hard")),
+    ]
+    for name in names:
+        if not (truth / name).is_file():
+            raise FileNotFoundError(
+                f"Missing WIDER FACE ground truth: {truth / name}. "
+                "Extract the official evaluation tools under <root>/eval_tools/ "
+                "with all four validation .mat files in ground_truth/"
+            )
+    loaded = {}
+    for name in names:
+        try:
+            loaded[name] = loadmat(truth / name)
+        except (OSError, ValueError, TypeError, IndexError, MatReadError) as error:
+            raise ValueError(
+                f"Invalid WIDER FACE ground truth: {truth / name}: {error}"
+            ) from error
+        required = (
+            ("event_list", "file_list", "face_bbx_list")
+            if name == "wider_face_val.mat"
+            else ("gt_list",)
+        )
+        missing = set(required) - loaded[name].keys()
+        if missing:
+            raise ValueError(
+                f"Invalid WIDER FACE ground truth: {truth / name}: missing {', '.join(sorted(missing))}"
+            )
+    face = loaded["wider_face_val.mat"]
     kept = {
-        s: loadmat(truth / f"wider_{s}_val.mat")["gt_list"]
-        for s in ("easy", "medium", "hard")
+        s: loaded[f"wider_{s}_val.mat"]["gt_list"] for s in ("easy", "medium", "hard")
     }
     rows = []
     for ei, event in enumerate(face["event_list"]):

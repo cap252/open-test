@@ -158,13 +158,25 @@ class InputCacheTests(unittest.TestCase):
             b = quantize(model, cache, config=q, ort=ort)
             self.assertEqual(a.model.SerializeToString(), b.model.SerializeToString())
 
-    def test_same_cache_writer_lock_excludes_a_second_writer(self):
+    def test_cache_waits_for_its_writer_without_failing(self):
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError
+        from threading import Event
         from opennpu_quant._locking import RunLock
 
-        with tempfile.TemporaryDirectory() as d:
+        entered = Event()
+        with tempfile.TemporaryDirectory() as d, ThreadPoolExecutor() as executor:
+
+            def open_cache():
+                entered.set()
+                return self.cache(d)
+
             with RunLock(Path(d) / "cache.lock"):
-                with self.assertRaisesRegex(RuntimeError, "Another process"):
-                    self.cache(d)
+                pending = executor.submit(open_cache)
+                self.assertTrue(entered.wait(5))
+                with self.assertRaises(TimeoutError):
+                    pending.result(timeout=0.1)
+            cache = pending.result(timeout=5)
+            self.assertEqual(4, len(list(cache())))
 
     def test_no_duck_typed_digest_trust(self):
         from opennpu_quant.quant.calibration import feed_digest

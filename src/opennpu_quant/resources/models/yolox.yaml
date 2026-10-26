@@ -1,0 +1,49 @@
+name: yolox
+title: YOLOX
+task: detection
+dataset: coco
+metric: AP
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - 640
+  - 640
+  layout: NCHW
+graphs:
+  network: network.onnx
+  postprocess: postprocess.onnx
+preprocess:
+  kind: yolox
+  size: 640
+  pad_value: 114
+  stride: 32
+  rectangular: true
+decode:
+  profile: historical_cnn33_v1
+  kind: yolo
+  output: predictions
+  confidence_threshold: 0.001
+  multi_label: false
+  max_nms_candidates: 30000
+  nms:
+    iou: 0.65
+  max_detections: 300
+source:
+  url: https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_s.pth
+  sha256: f55ded7181e1b0c13285c56e7790b8f0e8f8db590fe4edb37f0b7f345c913a30
+  repo: https://github.com/Megvii-BaseDetection/YOLOX
+  commit: 6ddff4824372906469a7fae2dc3206c7aa4bbaee
+  variant: S-640
+  file: checkpoint.pt
+  archive_sha256: 647bba7d16cc7e13feb5f2beca0296f86186c944f5a8fa9ccefc2629758bccba
+export:
+  family: yolox
+  opset: 17
+  simplify: false
+  dynamic_spatial: true
+  fixture_size: 640
+  outputs:
+  - predictions
+  split_detector: true

@@ -9,6 +9,12 @@ def preprocess(image, settings, layout="NCHW"):
     width, height = image.size
     meta = dict(original_size=[width, height])
     kind = settings["kind"]
+    from .extended_preprocess import KINDS, preprocess as extended
+
+    if kind in KINDS:
+        if layout != "NCHW":
+            raise ValueError("Extended preprocessing requires NCHW")
+        return extended(image, settings)
     if kind == "center_crop":
         short, crop = settings["resize"], settings["crop"]
         resized = (

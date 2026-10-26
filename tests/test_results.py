@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import subprocess
 import sys
 import tempfile
@@ -21,7 +22,7 @@ def record(condition="fp32", value=0.8, **changes):
         model_name="테스트 모델",
         condition=condition,
         state="evaluated",
-        origin="historical_research",
+        origin="standalone_run",
         primary_metric="top1",
         dataset="imagenet",
         split="validation",
@@ -60,6 +61,72 @@ def record(condition="fp32", value=0.8, **changes):
 
 
 class ResultTests(unittest.TestCase):
+    def test_historical_origin_is_rejected_regardless_of_pairing_evidence(self):
+        for case in ("matching", "runtime", "source_code_identity", "missing"):
+            with self.subTest(case=case):
+                base = record(origin="historical_research")
+                quantized = record("q", 0.78, origin="historical_research")
+                if case == "missing":
+                    quantized["evidence"].clear()
+                elif case == "runtime":
+                    quantized["evidence"][case] = {"optimization": "ORT_ENABLE_ALL"}
+                elif case == "source_code_identity":
+                    quantized["evidence"][case] = "different-code"
+                with self.assertRaisesRegex(ValueError, "historical_research"):
+                    tables([base, quantized])
+
+    def test_mixed_historical_records_are_rejected_before_export(self):
+        records = [record(), record("q", 0.78, origin="historical_research")]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "records.json"
+            atomic_json(source, dict(schema_version=1, records=records))
+            before = source.read_bytes()
+            for action in (
+                lambda: tables(records),
+                lambda: read_records(source),
+                lambda: export_records(records, root / "direct"),
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "historical_research.*run 'r'.*model 'm'.*condition 'q'",
+                ):
+                    action()
+            self.assertFalse((root / "direct").exists())
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "opennpu_quant",
+                    "results",
+                    str(source),
+                    "--output",
+                    str(root / "cli"),
+                    "--stdout",
+                    "csv",
+                ],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(2, result.returncode, result.stderr)
+            self.assertEqual("", result.stdout)
+            for text in (
+                "historical_research",
+                "run 'r'",
+                "model 'm'",
+                "condition 'q'",
+            ):
+                self.assertIn(text, result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertFalse((root / "cli").exists())
+            self.assertEqual(before, source.read_bytes())
+
+    def test_other_origins_keep_existing_pairing_behavior(self):
+        rows, _ = tables([record(origin="custom"), record("q", 0.78, origin="custom")])
+        self.assertEqual("passed", rows[1]["pairing_status"])
+        self.assertEqual(97.5, rows[1]["recovery_pct"])
+
     def test_units_pairing_missing_and_zero(self):
         base, q = record(), record("pot_rtn", 0.78)
         rows, detail = tables([base, q])
@@ -95,22 +162,15 @@ class ResultTests(unittest.TestCase):
         q["metrics"]["top1"]["unit"] = "unknown"
         self.assertIsNone(tables([base, q])[0][1]["recovery_pct"])
 
-    def test_historical_protocol_mismatch_and_missing_evidence_are_unmatched(self):
-        for field in (
-            "model_identity",
-            "preprocessing_identity",
-            "source_code_identity",
-            "runtime",
-        ):
+    def test_identity_mismatch_and_missing_evidence_are_unmatched(self):
+        for field in ("model_identity", "preprocessing_identity"):
             for missing in (True, False):
                 with self.subTest(field=field, missing=missing):
                     base, q = record(), record("q", 0.78)
                     if missing:
                         q["evidence"].pop(field)
                     else:
-                        q["evidence"][field] = (
-                            {"optimization": "other"} if field == "runtime" else "other"
-                        )
+                        q["evidence"][field] = "other"
                     row = tables([base, q])[0][1]
                     self.assertIsNone(row["recovery_pct"])
                     self.assertEqual(
@@ -123,7 +183,7 @@ class ResultTests(unittest.TestCase):
         q["model_name"] = "=1+1\t위험\n줄"
         q["metric_details"] = {"per_class_iou": [0.2, None, 0.4]}
         with tempfile.TemporaryDirectory() as temp:
-            export_records([base, q], temp)
+            export_records([base, q], temp, formats="csv,tsv,json")
             p = Path(temp)
             self.assertTrue(
                 (p / "results.csv").read_bytes().startswith(b"\xef\xbb\xbf")
@@ -160,8 +220,6 @@ class ResultTests(unittest.TestCase):
                     str(p / "records.json"),
                     "--stdout",
                     "tsv",
-                    "--view",
-                    "full",
                 ],
                 capture_output=True,
                 text=True,
@@ -169,12 +227,20 @@ class ResultTests(unittest.TestCase):
             )
             self.assertEqual(content, completed.stdout)
             self.assertEqual("", completed.stderr)
-            code = "from opennpu_quant.cli import main; import sys; main(['results',sys.argv[1]]); assert not set(['numpy','onnx','onnxruntime','torch','tensorflow','cv2']) & set(sys.modules)"
-            subprocess.run(
-                [sys.executable, "-c", code, str(p / "records.json")],
-                stdout=subprocess.DEVNULL,
+            code = """
+import sys, json, contextlib, io
+from opennpu_quant.cli import main
+with contextlib.redirect_stdout(io.StringIO()):
+    main(['results',sys.argv[1]])
+print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'} & set(sys.modules))))
+"""
+            checked = subprocess.run(
+                [sys.executable, "-O", "-c", code, str(p / "records.json")],
+                capture_output=True,
+                text=True,
                 check=True,
             )
+            self.assertEqual([], json.loads(checked.stdout))
 
     def test_report_preserves_partial_denominators_and_rejects_tampering(self):
         from opennpu_quant.report import report
@@ -238,11 +304,20 @@ class ResultTests(unittest.TestCase):
             value = report(p)
             self.assertEqual("unverified", value["rows"][1]["state"])
             self.assertIsNone(value["rows"][1]["value_pct"])
+            report(p, formats="md")
             self.assertIn("—", (p / "summary.md").read_text())
             self.assertTrue((p / "records.json").is_file())
-            code = "from opennpu_quant.cli import main; import sys; main(['report',sys.argv[1],'--stdout','tsv']); assert not set(['numpy','onnx','onnxruntime','torch','tensorflow','cv2']) & set(sys.modules)"
-            subprocess.run(
-                [sys.executable, "-c", code, str(p)],
-                stdout=subprocess.DEVNULL,
+            code = """
+import sys, json, contextlib, io
+from opennpu_quant.cli import main
+with contextlib.redirect_stdout(io.StringIO()):
+    main(['report',sys.argv[1],'--stdout','tsv'])
+print(json.dumps(sorted({'numpy','onnx','onnxruntime','torch','tensorflow','cv2'} & set(sys.modules))))
+"""
+            checked = subprocess.run(
+                [sys.executable, "-O", "-c", code, str(p)],
+                capture_output=True,
+                text=True,
                 check=True,
             )
+            self.assertEqual([], json.loads(checked.stdout))

@@ -1,0 +1,391 @@
+{
+  "reference_id": "b8e7d59a67ac3062ce5eb56136086384fbeab16b49d07fddbff8a364b835a399",
+  "export_settings": {
+    "deeplabv3_mnv2_voc": {
+      "family": "tf_deeplab",
+      "opset": 18,
+      "simplify": false,
+      "graph_input": "sub_7:0",
+      "graph_output": "ResizeBilinear_2:0",
+      "split": {
+        "network_input": "images",
+        "network_outputs": [
+          "logits/semantic/BiasAdd:0"
+        ]
+      },
+      "framework_parity": {
+        "logits_absolute_bound": 0.0002,
+        "label_disagreement_fraction_limit": 0.0001
+      },
+      "fixtures": "voc_validation_first3"
+    },
+    "deeplabv3_r50_voc": {
+      "family": "mmseg",
+      "opset": 17,
+      "simplify": false,
+      "dynamic_spatial": true,
+      "fixture_size": 512,
+      "outputs": [
+        "logits"
+      ]
+    },
+    "deeplabv3plus_r50_voc": {
+      "family": "mmseg",
+      "opset": 17,
+      "simplify": false,
+      "dynamic_spatial": true,
+      "fixture_size": 512,
+      "outputs": [
+        "logits"
+      ],
+      "config": "deeplabv3plus/deeplabv3plus_r50-d8_4xb4-40k_voc12aug-512x512.py"
+    },
+    "efficientnet_b0": {
+      "family": "torchvision",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "efficientnet_lite0": {
+      "family": "timm",
+      "opset": 17,
+      "simplify": false
+    },
+    "efficientnet_lite4": {
+      "family": "timm",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "fcn_r50_voc": {
+      "family": "mmseg",
+      "opset": 17,
+      "simplify": false,
+      "dynamic_spatial": true,
+      "fixture_size": 512,
+      "outputs": [
+        "logits"
+      ]
+    },
+    "inception_v3": {
+      "family": "torchvision",
+      "simplify": true,
+      "opset": 18,
+      "kwargs": {
+        "aux_logits": true,
+        "transform_input": true,
+        "init_weights": false
+      },
+      "split": {
+        "network_input": "/Concat_output_0",
+        "network_outputs": [
+          "logits"
+        ]
+      },
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "mobilefacenet_relu_foamliu": {
+      "family": "mobilefacenet_relu",
+      "opset": 17,
+      "outputs": [
+        "embedding"
+      ]
+    },
+    "mobilenet_v1": {
+      "family": "timm",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "mobilenet_v2": {
+      "family": "torchvision",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "mobilenet_v3_large": {
+      "family": "torchvision",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "nanodet_plus_m_320": {
+      "family": "nanodet",
+      "opset": 18,
+      "simplify": true,
+      "split_detector": true
+    },
+    "posenet_101": {
+      "family": "posenet",
+      "opset": 18,
+      "simplify": true,
+      "split_detector": true,
+      "outputs": [
+        "heatmaps",
+        "offsets",
+        "displacements_fwd",
+        "displacements_bwd"
+      ]
+    },
+    "resnet101": {
+      "family": "torchvision",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "resnet18": {
+      "family": "torchvision",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "resnet50": {
+      "family": "torchvision",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "retinaface_mnet025_640": {
+      "family": "retinaface",
+      "opset": 18,
+      "simplify": true,
+      "split": {
+        "network_input": "images",
+        "network_outputs": [
+          "/BboxHead.0/conv1x1/Conv_output_0",
+          "/BboxHead.1/conv1x1/Conv_output_0",
+          "/BboxHead.2/conv1x1/Conv_output_0",
+          "/ClassHead.0/conv1x1/Conv_output_0",
+          "/ClassHead.1/conv1x1/Conv_output_0",
+          "/ClassHead.2/conv1x1/Conv_output_0",
+          "/LandmarkHead.0/conv1x1/Conv_output_0",
+          "/LandmarkHead.1/conv1x1/Conv_output_0",
+          "/LandmarkHead.2/conv1x1/Conv_output_0"
+        ]
+      },
+      "framework_parity": {
+        "output_absolute_bounds": {
+          "loc": 0.0001,
+          "landmarks": 0.0001
+        }
+      }
+    },
+    "retinanet_resnet50_fpn": {
+      "family": "retinanet",
+      "opset": 18,
+      "simplify": true,
+      "outputs": [
+        "boxes",
+        "labels",
+        "scores"
+      ],
+      "split_detector": true
+    },
+    "shufflenet_v2_x1_0": {
+      "family": "torchvision",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "squeezenet1_1": {
+      "family": "torchvision",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "ssd_mobilenet_v2_320": {
+      "family": "tf_ssd",
+      "opset": 18,
+      "simplify": true,
+      "split": {
+        "network_input": "StatefulPartitionedCall/StatefulPartitionedCall/ssd_mobile_net_v2keras_feature_extractor/functional_1/Conv1/Conv2D__35:0",
+        "network_outputs": [
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalClassHead_5/ClassPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalBoxHead_5/BoxEncodingPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalClassHead_4/ClassPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalBoxHead_4/BoxEncodingPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalClassHead_3/ClassPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalBoxHead_3/BoxEncodingPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalClassHead_2/ClassPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalBoxHead_2/BoxEncodingPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalClassHead_1/ClassPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalBoxHead_1/BoxEncodingPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalClassHead_0/ClassPredictor/BiasAdd:0",
+          "StatefulPartitionedCall/StatefulPartitionedCall/BoxPredictor/ConvolutionalBoxHead_0/BoxEncodingPredictor/BiasAdd:0"
+        ]
+      }
+    },
+    "unet_resnet50_voc": {
+      "family": "unet",
+      "opset": 17,
+      "simplify": false,
+      "dynamic_spatial": false,
+      "outputs": [
+        "logits"
+      ]
+    },
+    "vgg16": {
+      "family": "torchvision",
+      "opset": 18,
+      "simplify": true,
+      "framework_parity": {
+        "logits_absolute_bound": 0.0001
+      }
+    },
+    "yolov3_full": {
+      "family": "yolov3",
+      "opset": 17,
+      "simplify": false,
+      "split_detector": true,
+      "fold_constant_floors": true
+    },
+    "yolov3_tiny": {
+      "family": "yolov3",
+      "opset": 18,
+      "simplify": true,
+      "split_detector": true,
+      "skipped_optimizers": [
+        "fuse_pad_into_pool"
+      ]
+    },
+    "yolov4_full": {
+      "family": "yolov4",
+      "opset": 17,
+      "simplify": false,
+      "outputs": [
+        "boxes",
+        "scores"
+      ],
+      "split_detector": true,
+      "fold_constant_floors": true
+    },
+    "yolov4_tiny": {
+      "family": "yolov4",
+      "opset": 18,
+      "simplify": true,
+      "outputs": [
+        "boxes",
+        "scores"
+      ],
+      "split_detector": true
+    },
+    "yolov5n": {
+      "family": "yolov5",
+      "opset": 18,
+      "simplify": true,
+      "split_detector": true
+    },
+    "yolov5s": {
+      "family": "yolov5",
+      "opset": 18,
+      "simplify": true,
+      "split": {
+        "network_input": "images",
+        "network_outputs": [
+          "/model/model.24/m.0/Conv_output_0",
+          "/model/model.24/m.1/Conv_output_0",
+          "/model/model.24/m.2/Conv_output_0"
+        ]
+      },
+      "framework_parity": {
+        "decoded_xywh_absolute_bound": 0.01
+      }
+    },
+    "yolov5s_seg": {
+      "family": "yolov5_seg",
+      "opset": 17,
+      "simplify": false,
+      "dynamic_spatial": true,
+      "fixture_size": 640,
+      "outputs": [
+        "predictions",
+        "prototypes"
+      ],
+      "split_detector": true
+    },
+    "yolov7_face": {
+      "family": "yolov7_face",
+      "opset": 17,
+      "simplify": false,
+      "dynamic_spatial": true,
+      "fixture_size": 640,
+      "outputs": [
+        "predictions"
+      ],
+      "split_detector": true
+    },
+    "yolov7_full": {
+      "family": "yolov7",
+      "opset": 17,
+      "simplify": false,
+      "split_detector": true
+    },
+    "yolov7_tiny": {
+      "family": "yolov7",
+      "opset": 18,
+      "simplify": true,
+      "split_detector": true
+    },
+    "yolov8n": {
+      "family": "ultralytics",
+      "opset": 18,
+      "simplify": true,
+      "split_detector": true
+    },
+    "yolov9_s": {
+      "family": "yolov9",
+      "opset": 17,
+      "simplify": false,
+      "dynamic_spatial": true,
+      "fixture_size": 640,
+      "outputs": [
+        "predictions"
+      ],
+      "split_detector": true
+    },
+    "yolov9_t": {
+      "family": "yolov9",
+      "opset": 17,
+      "simplify": false,
+      "dynamic_spatial": true,
+      "fixture_size": 640,
+      "outputs": [
+        "predictions"
+      ],
+      "split_detector": true
+    },
+    "yolox": {
+      "family": "yolox",
+      "opset": 17,
+      "simplify": false,
+      "dynamic_spatial": true,
+      "fixture_size": 640,
+      "outputs": [
+        "predictions"
+      ],
+      "split_detector": true
+    }
+  }
+}

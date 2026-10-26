@@ -1,0 +1,8 @@
+{
+  "model-bundle": "/absolute/path/to/bundle",
+  "dataset-imagenet": "/data/datasets/imagenet-1k",
+  "dataset-coco": "/data/datasets/coco",
+  "dataset-widerface": "/data/datasets/widerface",
+  "dataset-voc": "/data/datasets/voc2012/VOCdevkit/VOC2012",
+  "lfw-cache": "/absolute/path/to/workspace/repro/lfw-cache"
+}

@@ -1,6 +1,23 @@
 import collections
 
 
+MAIN_COMPUTE = frozenset(
+    (
+        "Conv",
+        "FusedConv",
+        "NhwcConv",
+        "MatMul",
+        "Gemm",
+        "FusedMatMul",
+        "QLinearConv",
+        "QLinearMatMul",
+        "QGemm",
+        "ConvInteger",
+        "MatMulInteger",
+    )
+)
+
+
 def summarize_profile(events):
     counts = collections.Counter()
     types = {}
@@ -31,7 +48,24 @@ def summarize_profile(events):
             ("QLinearConv", "QLinearMatMul", "QGemm", "ConvInteger", "MatMulInteger")
         )
     )
+    cpu_compute = [
+        r
+        for r in rows
+        if r["provider"] == "CPUExecutionProvider" and r["op_type"] in MAIN_COMPUTE
+    ]
     return {
+        "cuda_observed": bool(cuda),
+        "cpu_main_compute": cpu_compute,
+        # A sampled profile describes executed operators, not every possible path.
+        "sampled_main_compute_placement": "cpu_compute_observed"
+        if cpu_compute
+        else "cuda_only_observed"
+        if any(
+            r["provider"] == "CUDAExecutionProvider" and r["op_type"] in MAIN_COMPUTE
+            for r in rows
+        )
+        else "not_observed",
+        "full_network_placement": "not_verified",
         "operators": rows,
         "cuda_calls": cuda,
         "cpu_calls": cpu,
@@ -46,18 +80,7 @@ def assert_cuda_observed(providers, profile):
             "CUDA was requested but no CUDA kernel executed; CPU fallback is not GPU success"
         )
     if not any(
-        r["provider"] == "CUDAExecutionProvider"
-        and r["op_type"]
-        in (
-            "Conv",
-            "FusedConv",
-            "NhwcConv",
-            "MatMul",
-            "Gemm",
-            "FusedMatMul",
-            "QLinearConv",
-            "QLinearMatMul",
-        )
+        r["provider"] == "CUDAExecutionProvider" and r["op_type"] in MAIN_COMPUTE
         for r in profile["operators"]
     ):
         raise RuntimeError("No main neural-network computation was observed on CUDA")

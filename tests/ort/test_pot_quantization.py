@@ -114,6 +114,7 @@ class PotQuantizationTests(unittest.TestCase):
 
     def test_shared_weights_different_axes_bias_and_dynamic_matmul(self):
         config = QuantizationConfig(
+            calibration=CalibrationConfig(),
             scope="all",
             activation_symmetric=False,
             weight_granularity="per_channel",
@@ -161,6 +162,9 @@ class PotQuantizationTests(unittest.TestCase):
 
         for activation in ("float", "pot_nearest"):
             config = QuantizationConfig(
+                calibration=CalibrationConfig(),
+                scope="basic",
+                activation_symmetric=True,
                 weight_granularity="per_channel",
                 activation_scale_policy=activation,
                 weight_scale_policy="pot_mse",
@@ -247,6 +251,9 @@ class PotQuantizationTests(unittest.TestCase):
                 n.from_array(np.zeros_like(n.to_array(initializer)), initializer.name)
             )
         config = QuantizationConfig(
+            calibration=CalibrationConfig(),
+            scope="basic",
+            activation_symmetric=True,
             weight_granularity="per_channel",
             activation_scale_policy="pot_ceil",
             weight_scale_policy="pot_mse",

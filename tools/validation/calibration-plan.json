@@ -1,0 +1,698 @@
+{
+  "schema_version": 1,
+  "scope": "Full original calibration sets for all 38 selected models; six previously verified and 32 newly collected; no AdaRound training",
+  "models": [
+    {
+      "model": "resnet18",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/01/calibration/2048/statistics.json",
+          "sha256": "5464234b8646854035db7c787eb617276582177992d42c4ad2b81793d3199194"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/01/calibration/2048/histograms.json",
+          "sha256": "fa02fec952f180c349da0dc2d1e6be633d3d39bec1642aa72b77f325fca9380d"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/01/calibration/2048/histograms.npz",
+          "sha256": "c439637770ac437953d8400d91f7c8bc1b713b1e9410b581ac7cb984de026aef"
+        }
+      }
+    },
+    {
+      "model": "resnet50",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/02/calibration/2048/statistics.json",
+          "sha256": "80d86c42f33297ddaf6c5694da51742eb5c661ad4257c32e909a22d7cd70f95b"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/02/calibration/2048/histograms.json",
+          "sha256": "eec5756f22c05dc167e0c42cd901f962ad7ec241931566a3663da5b513560797"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/02/calibration/2048/histograms.npz",
+          "sha256": "759f51168493285f831e39c365ef966e760792526141d79346e11ab507bfcbbd"
+        }
+      }
+    },
+    {
+      "model": "resnet101",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/03/calibration/2048/statistics.json",
+          "sha256": "85429b9c7d8371a34c35a3a273cdcec470e4d7c17386a50558f615ecc32b5f25"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/03/calibration/2048/histograms.json",
+          "sha256": "3e9b442edf2b736e83302eb6ad8182fcddcb2fc09c5a3f2e4d3936113743d8f6"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/03/calibration/2048/histograms.npz",
+          "sha256": "8c782a396c503e146e737cdb30e14a9097c2dfa85bfa4e3d353a312b5eebe523"
+        }
+      }
+    },
+    {
+      "model": "mobilenet_v1",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/04/calibration/2048/statistics.json",
+          "sha256": "7b01298e9bbd6b7ac743eaa0e87ce1e297a79002bd726a7adc4a19c868ed802b"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/04/calibration/2048/histograms.json",
+          "sha256": "9d703aaffd89f05e3d704954b99db802529996bf4c3d71bed207d73b259af2ed"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/04/calibration/2048/histograms.npz",
+          "sha256": "31dc1b10da8995369aa35fae20e84d46759451d69424c460877873c46adfb0a5"
+        }
+      }
+    },
+    {
+      "model": "mobilenet_v2",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/05/calibration/2048/statistics.json",
+          "sha256": "85866d88df86d85175030f579bd9919108b2416bc99f782299ffad2a7fd7705b"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/05/calibration/2048/histograms.json",
+          "sha256": "a442f5a0ce11e77d504e623605d1fe133ea7173c8d8e14bf76deb20675168e87"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/05/calibration/2048/histograms.npz",
+          "sha256": "272ff0382145a74cff90ffd075f61dfc24788b0e84d3d95b965f3897db2c760c"
+        }
+      }
+    },
+    {
+      "model": "mobilenet_v3_large",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/06/calibration/2048/statistics.json",
+          "sha256": "1d6bb96d08e7e25d2a481092959a8c30c417a0b2a67b8aec6cda752862ae5358"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/06/calibration/2048/histograms.json",
+          "sha256": "822d62e6a0137ff20f96043312eded89007967ffebcc866b71e5ed7adad35c28"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/06/calibration/2048/histograms.npz",
+          "sha256": "462cde7f9a8729f4abc90d50a105e3d36df88dc2147f1508b11d6541ee3bd1e7"
+        }
+      }
+    },
+    {
+      "model": "efficientnet_b0",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/07/calibration/2048/statistics.json",
+          "sha256": "7cf95a62e70dc65e66386912b3fad2ba319c8133fb3f65d792ca8fd79b299496"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/07/calibration/2048/histograms.json",
+          "sha256": "b4703fb47eae2d6d86edfec1ace341735477f5e11c8ac7c717102ac3a9fd8975"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/07/calibration/2048/histograms.npz",
+          "sha256": "d72dc89cdb60ad4dbda1b90eb7d5d04704b80c6a785c2669a3261140e7eda033"
+        }
+      }
+    },
+    {
+      "model": "efficientnet_lite4",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/08/calibration/2048/statistics.json",
+          "sha256": "2f2789ec7419844ea16f7fe0c1c5ed481ab11cb982f5ffdd6575ff9794c3b790"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/08/calibration/2048/histograms.json",
+          "sha256": "1336015192cfba18ddb861951da8299b8f523f1fb2f9124dea155a3668f20808"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/08/calibration/2048/histograms.npz",
+          "sha256": "cc47f90fc346127ec6da8e1cd78fc888d6261f9539b166dcf381ed289c3ef8a8"
+        }
+      }
+    },
+    {
+      "model": "squeezenet1_1",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/09/calibration/2048/statistics.json",
+          "sha256": "6961fba9f9e0c253dea7de4f1bdc870070af7d005f7df7cb79fcad007111687c"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/09/calibration/2048/histograms.json",
+          "sha256": "52dbbcc763724873698571e368903267ca1935e39f54d27971c10c321a3d07f1"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/09/calibration/2048/histograms.npz",
+          "sha256": "dbbc5dbaddf978c32920e24519b5c4ddab20f2908e34332dca6d7af56d199c0f"
+        }
+      }
+    },
+    {
+      "model": "shufflenet_v2_x1_0",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/10/calibration/2048/statistics.json",
+          "sha256": "67cc72367631e121b76d0a526c4a526ad5b4ea8993ee19cda7b12f9f95888cf2"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/10/calibration/2048/histograms.json",
+          "sha256": "6c85ca385eb161e44a7684d041a1cd00fbf2281404ae9448d7e178552acde690"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/10/calibration/2048/histograms.npz",
+          "sha256": "340cdd06d125e8487029e0afa122b8f0a3eb170610b2d007c5b376fd3a9d59d0"
+        }
+      }
+    },
+    {
+      "model": "vgg16",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/11/calibration/2048/statistics.json",
+          "sha256": "1d0d2b4eead8c18f17f5e03dfe867a314e79feb9decd11d779eff410782836cc"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/11/calibration/2048/histograms.json",
+          "sha256": "d84be2123af6854d1ee52ae8f65dd707d237969166ffdff8afc89d78ef42f3dd"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/11/calibration/2048/histograms.npz",
+          "sha256": "3a71af45ee0f637de3b4e13049a23e5c5aa15b8d33ed16525a93e453218b491f"
+        }
+      }
+    },
+    {
+      "model": "inception_v3",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/12/calibration/2048/statistics.json",
+          "sha256": "56a6d28fbc4a40c199fd0a8d5be6129d4393639360f6366642c8888fdb8722ff"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/12/calibration/2048/histograms.json",
+          "sha256": "2480382d37c602fc28d7cefbc26df87a03858ff0a74fd0532264d0f322dd3aaa"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/12/calibration/2048/histograms.npz",
+          "sha256": "8b4631d39ada039b385017cdbca5c578d0d1c397a37341b53dabad82133ed156"
+        }
+      }
+    },
+    {
+      "model": "efficientnet_lite0",
+      "dataset": "imagenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_reduced_20260928/models/efficientnet_lite0_timm_in1k/validation/calibration/statistics.json",
+          "sha256": "51357007a9f109d82b4ff8abd23f3a6d58a187ffd4102716a2ce996035b59a81"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_reduced_20260928/models/efficientnet_lite0_timm_in1k/validation/calibration/histograms.json",
+          "sha256": "556b5d06c4f681645d3d2f19d5917cce7ab5a8485dfd7acc80d7c9c6d34031a4"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_reduced_20260928/models/efficientnet_lite0_timm_in1k/validation/calibration/histograms.npz",
+          "sha256": "7f0e7c115f0d0c1d12fb0e9017f60a68e7cd584e0f969b15b3d5500e035b073c"
+        }
+      }
+    },
+    {
+      "model": "yolov3_tiny",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/13/calibration/2048/statistics.json",
+          "sha256": "f34492be43bac1ce2963d4f86b7697e7c6fe5683a4a8f1954beb89599ea1c8ac"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/13/calibration/2048/histograms.json",
+          "sha256": "eb028a1f3e8192b91a6055c756cfa9c2ba05d6f67a10c5f090311e1f8ee2b7e9"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/13/calibration/2048/histograms.npz",
+          "sha256": "74055b951069f6170d187938f283d0ca8fd9de708ce522e73baef340154b0fce"
+        }
+      }
+    },
+    {
+      "model": "yolov4_tiny",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/14/calibration/2048/statistics.json",
+          "sha256": "a288703b690f4f2286be024a8d8f4a705c45c569d207164d34883609af38d233"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/14/calibration/2048/histograms.json",
+          "sha256": "b6af27389ffc895b921bd47b5ee0af651af097d149861d3bb97bf7a7e1d0ee08"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/14/calibration/2048/histograms.npz",
+          "sha256": "1542883ee27c6438662f525966623a65b11243e079b742b0951f3e2fe4c7f459"
+        }
+      }
+    },
+    {
+      "model": "yolov5n",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/15/calibration/2048/statistics.json",
+          "sha256": "236626d7948533aef57276a692c0f9c68023a33187d1ad6fdeedd5dcf3b4cfe5"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/15/calibration/2048/histograms.json",
+          "sha256": "66d6722d452a0c050b67570211de08f48f54eec4235903b8ae05c7e7e91a95eb"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/15/calibration/2048/histograms.npz",
+          "sha256": "7ad42c58606ed5c433b9e7812ef7eb6b14f524ff2b247b9632da6bea4e9cc22a"
+        }
+      }
+    },
+    {
+      "model": "yolov5s",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/16/calibration/2048/statistics.json",
+          "sha256": "bf9430f50286fef791f08c2c24cf4433decbdbefafe27971bde1ae95fa06c74f"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/16/calibration/2048/histograms.json",
+          "sha256": "e1e4a168bce1dd51a05c3fddb53d9a724b0b656287e829e03d6815af7b4a694e"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/16/calibration/2048/histograms.npz",
+          "sha256": "3d410efb7d3c100f71c9989c93fe43e10cd6b2bf7389eada8f5e32b31e207692"
+        }
+      }
+    },
+    {
+      "model": "yolov7_tiny",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/17/calibration/2048/statistics.json",
+          "sha256": "4c272d2344d19684b0545d2c8c739fa51fa9338d6795abb82de42d7086e02598"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/17/calibration/2048/histograms.json",
+          "sha256": "9f1ef0e4f1724206f8d21eafbf712fa73fb752dfee494fb0b1f25b06f30359bf"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/17/calibration/2048/histograms.npz",
+          "sha256": "86260a23676d5f656cb82e36526cae7d31c1c85b27a3a8c180a02d3aa5c359ea"
+        }
+      }
+    },
+    {
+      "model": "yolov8n",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/18/calibration/2048/statistics.json",
+          "sha256": "3698c32fef887538926dfc70f6f6a19af30eeb8283f81ada1d918207fd508f6a"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/18/calibration/2048/histograms.json",
+          "sha256": "3a7fb671a276f3623515581edac2d545c1917101ca1d1aa2d7c1720c0753ce07"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/18/calibration/2048/histograms.npz",
+          "sha256": "04ce80b9a43c9b23014ecc5d7d38a3a741dbcf09a1781c709cf442ced577f3db"
+        }
+      }
+    },
+    {
+      "model": "ssd_mobilenet_v2_320",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/19/calibration/2048/statistics.json",
+          "sha256": "0852e1526cad05ac452520c3f71cf8abc0c613f20cb0b714b28c9565119141ab"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/19/calibration/2048/histograms.json",
+          "sha256": "d37db5792f046f4e84d5f199f0f961af3ce40f387c18d2d132fd378b9430aa14"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/19/calibration/2048/histograms.npz",
+          "sha256": "762eeb8843daaf145695df83f93052e3bf67dee080d1f79da5a30d42cc064dcc"
+        }
+      }
+    },
+    {
+      "model": "nanodet_plus_m_320",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/20/calibration/2048/statistics.json",
+          "sha256": "70889394ee1a90a858c8170402ea9cd2de85ddce96cb42805c1d1e823c4ec8e2"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/20/calibration/2048/histograms.json",
+          "sha256": "1f33026cedcd084391b8911377d737b83746e6544b923f2a4b34731e7fb8a095"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/20/calibration/2048/histograms.npz",
+          "sha256": "70da4a3a42cbcbd1b3db79d61ac9cfc2d91abd7a5341d9d88a4cad6867872311"
+        }
+      }
+    },
+    {
+      "model": "retinanet_resnet50_fpn",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/22/calibration/2048/statistics.json",
+          "sha256": "7d578cae060b88a61f3eeec2247538e69638acb2cbf44f068e9aea10bf675b02"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/22/calibration/2048/histograms.json",
+          "sha256": "989963bc70a8bef25785b5909463cec86bebe8a81097b55b73f13d83427604fa"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/22/calibration/2048/histograms.npz",
+          "sha256": "5331f32f64922bc64f1a643118dca3d54df4397c4cf2b9bb0221099c8cfe4024"
+        }
+      }
+    },
+    {
+      "model": "yolov9_t",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/yolov9_t/work/calibration/statistics.json",
+          "sha256": "c166a4b175d69afe596d8f871e00383063d4f9b782afcd88b546678bbb97d1fc"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/yolov9_t/work/calibration/histograms.json",
+          "sha256": "5ac90c85cd2c41833f7ca8af466007e664a8e1885b0cca97bd17096b949e90a4"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/yolov9_t/work/calibration/histograms.npz",
+          "sha256": "2dee278203f28f855e1f299a883ebe928a4933d8a8b65a0be843f84831481658"
+        }
+      }
+    },
+    {
+      "model": "yolox",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/yolox/work/calibration/statistics.json",
+          "sha256": "09ce0a1b909a182828c3e7aa0f1ff65acc8d6709b934dd3ffcb60fb7de55ebca"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/yolox/work/calibration/histograms.json",
+          "sha256": "f4c43c09457e13b5662c2a7d691d151823451abf226974181d9af1e8b2631009"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/yolox/work/calibration/histograms.npz",
+          "sha256": "d4f33b447b2b7484c67a9659fdaa0bf143441082ae0832381c933e15ec266866"
+        }
+      }
+    },
+    {
+      "model": "retinaface_mnet025_640",
+      "dataset": "widerface",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/27/calibration/2048/statistics.json",
+          "sha256": "2f0e4eee130e247fce760f51929be961cc0ff60c76a8e1202dfcf8f4f0e6c802"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/27/calibration/2048/histograms.json",
+          "sha256": "f0c4b842c91eb3c667ae6b749d854204835498a60ff575ddf4194a9d8af8e56d"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_controls_20260925_preflight/27/calibration/2048/histograms.npz",
+          "sha256": "c0a77869b8f1b8dee01373448fc44a8e074fa4777eca403a6f3abcefc7bd76cc"
+        }
+      }
+    },
+    {
+      "model": "yolov7_face",
+      "dataset": "widerface",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/models/yolov7_face/work/calibration/statistics.json",
+          "sha256": "f94487563a3a71d9e4190283f87f94e38dfc1615a29f8bd961edd41ca629fc6f"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/models/yolov7_face/work/calibration/histograms.json",
+          "sha256": "3aa49cede6d4a9eb3e7d1b340e9a10f9f2926424a62397d27524a9e8af872f8a"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/models/yolov7_face/work/calibration/histograms.npz",
+          "sha256": "afe724d90524875cab27a77e1a088c5c96ee2b7d91abe6e3dccbc69ccac881ae"
+        }
+      }
+    },
+    {
+      "model": "posenet_101",
+      "dataset": "coco_keypoints",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/29/calibration/2048/statistics.json",
+          "sha256": "62919be6a41005f2ae432725ab59ca95783d622b2bf98344bdcf9de15c5df08d"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/29/calibration/2048/histograms.json",
+          "sha256": "1b0ed981c74a67f8a524fdf35dbebb59a593e6b919fd06c9d3ffdb48bf6ed3bc"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/29/calibration/2048/histograms.npz",
+          "sha256": "0ddf0162031d32f84fe14c42ff9fff7e823d1bcb9acbc2b9f1a6705411cdc157"
+        }
+      }
+    },
+    {
+      "model": "deeplabv3_mnv2_voc",
+      "dataset": "voc",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/37/calibration/2048/statistics.json",
+          "sha256": "7dd0b372d3b54b87e7f818647bfccfd2c0810c6aded0254ef93e81df0345f128"
+        },
+        "histograms.json": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/37/calibration/2048/histograms.json",
+          "sha256": "5411e0163994c9c819cdb8755cc1521bd9c8117080e63e9b8637296443b615ec"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-repo/results/accuracy_matrix_pot_percentile_20260923/37/calibration/2048/histograms.npz",
+          "sha256": "85837af15c2d52fc192c536bd6eb7701301203a315b57869f55397341caf1571"
+        }
+      }
+    },
+    {
+      "model": "unet_resnet50_voc",
+      "dataset": "voc",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/unet_resnet50_voc/work/calibration/statistics.json",
+          "sha256": "bd88f0b8e53f8b4109424e7fc70bfe7b3c1facd3ad0ee9adc8d287fb69dd8b89"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/unet_resnet50_voc/work/calibration/histograms.json",
+          "sha256": "b7aa8abfb56ccbefd1e8c3a136efff863e2d3160065243e78217b234e33e90d9"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/unet_resnet50_voc/work/calibration/histograms.npz",
+          "sha256": "abfeec4f87252c7c57411409b5f93f685691795150704af950187cb02ce5cfa9"
+        }
+      }
+    },
+    {
+      "model": "deeplabv3_r50_voc",
+      "dataset": "voc",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/deeplabv3_r50_voc/work/calibration/statistics.json",
+          "sha256": "77a7851379f96b83338f56cee7d4cb0fe6a5b985ea512558280e8beb50353cbc"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/deeplabv3_r50_voc/work/calibration/histograms.json",
+          "sha256": "cfd9088a0c662e08439e22d2bd7e748333a5fbfa7c528086628af4dd66141996"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/deeplabv3_r50_voc/work/calibration/histograms.npz",
+          "sha256": "19f1db3c463d13a54561b25c70aa85c7e97ceb55eafdfc6d80836046e4fef6c1"
+        }
+      }
+    },
+    {
+      "model": "fcn_r50_voc",
+      "dataset": "voc",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/models/fcn_r50_voc/work/calibration/statistics.json",
+          "sha256": "6f727d8fa250a8efc1d0eabe5a270f7d1b9a6072d7ee5db659e03e8ce8c35221"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/models/fcn_r50_voc/work/calibration/histograms.json",
+          "sha256": "152615998431fb455517aa84498c12fc0b4c8047386598056b6fe05c3597c442"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/adaround_cnn33_recovery_20261008/models/fcn_r50_voc/work/calibration/histograms.npz",
+          "sha256": "324cc071fd88b75ea7f9790e9fffb31adea9231943addbb0c4a21e388b75731b"
+        }
+      }
+    },
+    {
+      "model": "yolov5s_seg",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/yolov5s_seg/work/calibration/statistics.json",
+          "sha256": "32f38ded02ad62c018c30754d4f8ea58213497c86228542e97573f53d1044ff5"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/yolov5s_seg/work/calibration/histograms.json",
+          "sha256": "f498f1788ab18b22de7aa7a6c22d60bd42096718b6a3d8da04be1c74b6bb7459"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/adaround_cnn33_20261005/models/yolov5s_seg/work/calibration/histograms.npz",
+          "sha256": "0e76cb5c2f91d143beac04f47e3ba2dc1e874a4427807a45e753c6307be7c187"
+        }
+      }
+    },
+    {
+      "model": "yolov3_full",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov3_full/work/calibration/statistics.json",
+          "sha256": "f5d07dbc72363f9dd38e326e1400c49f8f296e38e353fd24dc6497ccdfcd16e7"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov3_full/work/calibration/histograms.json",
+          "sha256": "a6838d2b1da378a625c8fb7dc128239d70470950b0b3f01e4a21b081462e6115"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov3_full/work/calibration/histograms.npz",
+          "sha256": "d56d8db858cd47a477a20110430b089f1b0b1e758f65550256d8b0b7d0bad2e7"
+        }
+      }
+    },
+    {
+      "model": "yolov4_full",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov4_full/work/calibration/statistics.json",
+          "sha256": "4c211e277c49cbceba551113b142122c3879d4e6443d3ab2553661fd19b5d861"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov4_full/work/calibration/histograms.json",
+          "sha256": "61d346c48e45955669112f87af4a2285d3366f88a9e8226559c23d36acb51fdb"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov4_full/work/calibration/histograms.npz",
+          "sha256": "da0c27daf772ae371bdddb7d56677a4a2aca6e4458d0d683568fe92ffa5f022f"
+        }
+      }
+    },
+    {
+      "model": "yolov7_full",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov7_full/work/calibration/statistics.json",
+          "sha256": "07e8d627c0483588707bfda761e92778360c7d87913e09ca1fc963c5752cca61"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov7_full/work/calibration/histograms.json",
+          "sha256": "2fc52e772495560309e906c389312be086f1138c039c7e3c81257248635555de"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov7_full/work/calibration/histograms.npz",
+          "sha256": "42de6891a8473db2f1c53b90dec050414a35590a65ea0dcf7edcff598adf3177"
+        }
+      }
+    },
+    {
+      "model": "yolov9_s",
+      "dataset": "coco",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov9_s/work/calibration/statistics.json",
+          "sha256": "1114cac61e2f33ffa496553a4e813ec3fdb97188e7835bd80b2daf1c00e26272"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov9_s/work/calibration/histograms.json",
+          "sha256": "3a800eb1a91b933f0a4e98f69fa0b902508aa0573f3fca6fd951b791146b6fa2"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/yolo_capacity_20261013/models/yolov9_s/work/calibration/histograms.npz",
+          "sha256": "449464b64c34e2c7cfa2caf42ed4bbd547c050094f646607a9727f65b7cbde86"
+        }
+      }
+    },
+    {
+      "model": "mobilefacenet_relu_foamliu",
+      "dataset": "lfw_mobilefacenet",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/mobilefacenet_relu_20261014/models/mobilefacenet_relu_foamliu/work/calibration/statistics.json",
+          "sha256": "e5228844eecaf1ba75e675052d7bea89f61422a3bafe51005335a873a078624e"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/mobilefacenet_relu_20261014/models/mobilefacenet_relu_foamliu/work/calibration/histograms.json",
+          "sha256": "06eeda36c9b2ca1f840ad20bbb45d1f665f347a1c2888e26bec3e5b1e052e5c3"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/mobilefacenet_relu_20261014/models/mobilefacenet_relu_foamliu/work/calibration/histograms.npz",
+          "sha256": "7408f195248833531c4050b9a6f3e8d3f5c232d468d4a970afe8e3d8a1e01551"
+        }
+      },
+      "dataset_override": {
+        "kind": "images",
+        "manifest": {
+          "id": "artifact://final-data-manifests/lfw_mobilefacenet/manifest.json",
+          "sha256": "20fd597bb943501b3a9f99d2ab25a02c0f579804587cae7bfc137b0919efabb0"
+        },
+        "root": "artifact://dataset-lfw/"
+      }
+    },
+    {
+      "model": "deeplabv3plus_r50_voc",
+      "dataset": "voc",
+      "reference": {
+        "statistics.json": {
+          "id": "artifact://research-runs/deeplab_arcface_20261014/models/deeplabv3plus_r50_voc/work/calibration/statistics.json",
+          "sha256": "2c3fc761539fb0024efcb44646b183a01fdba2f5095b8b182160f322aadcc021"
+        },
+        "histograms.json": {
+          "id": "artifact://research-runs/deeplab_arcface_20261014/models/deeplabv3plus_r50_voc/work/calibration/histograms.json",
+          "sha256": "4f774c1c30c7462fb8ff162e1d25dc101947c5865627ebdfc95a6c51e02b8db5"
+        },
+        "histograms.npz": {
+          "id": "artifact://research-runs/deeplab_arcface_20261014/models/deeplabv3plus_r50_voc/work/calibration/histograms.npz",
+          "sha256": "6cc1f7ccb34f48d4087bb22e13ab3bb0f6e1f6d32e001d84c046a1a0d41ddc55"
+        }
+      }
+    }
+  ]
+}

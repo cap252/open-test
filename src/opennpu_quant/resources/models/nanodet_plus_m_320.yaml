@@ -1,0 +1,42 @@
+name: nanodet_plus_m_320
+title: NanoDet-Plus
+task: detection
+dataset: coco
+metric: AP
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - 320
+  - 320
+  layout: NCHW
+graphs:
+  network: network.onnx
+  postprocess: postprocess.onnx
+preprocess:
+  kind: nanodet
+  size: 320
+  mean:
+  - 103.53
+  - 116.28
+  - 123.675
+  std:
+  - 57.375
+  - 57.12
+  - 58.395
+decode:
+  kind: nanodet
+  output: predictions
+source:
+  url: https://github.com/RangiLyu/nanodet/releases/download/v1.0.0-alpha-1/nanodet-plus-m_320_checkpoint.ckpt
+  sha256: f4c6080f3ef35a64c3030d559438b436462f227ce29700bca71327203e42dea2
+  variant: NanoDet-Plus-m-320; ShuffleNetV2 1.0x
+  code_revision: d3fb34fa91d6020f273d6d063bf324dcd97bac12
+  repo: https://github.com/RangiLyu/nanodet
+  commit: d3fb34fa91d6020f273d6d063bf324dcd97bac12
+export:
+  family: nanodet
+  opset: 18
+  simplify: true
+  split_detector: true

@@ -1,0 +1,49 @@
+name: yolov9_t
+title: YOLOv9-T
+task: detection
+dataset: coco
+metric: AP
+input:
+  name: images
+  shape:
+  - 1
+  - 3
+  - height
+  - width
+  layout: NCHW
+graphs:
+  network: network.onnx
+  postprocess: postprocess.onnx
+preprocess:
+  kind: letterbox_dynamic
+  size: 640
+  pad_value: 114
+  stride: 32
+  rectangular: true
+decode:
+  profile: historical_cnn33_v1
+  kind: yolo_no_objectness
+  output: predictions
+  confidence_threshold: 0.001
+  multi_label: true
+  max_nms_candidates: 30000
+  nms:
+    iou: 0.7
+  max_detections: 300
+source:
+  url: https://github.com/WongKinYiu/yolov9/releases/download/v0.1/yolov9-t-converted.pt
+  sha256: 61e080e964e65e32b884477c5e6344c607c7e02103d64649de810edaeb869803
+  repo: https://github.com/WongKinYiu/yolov9
+  commit: 5b1ea9a8b3f0ffe4fe0e203ec6232d788bb3fcff
+  variant: T-converted-640
+  file: checkpoint.pt
+  archive_sha256: 4b4892e93994726ae63ebe29866f5810b070bfd302a614fe5974bbc2a83cc73a
+export:
+  family: yolov9
+  opset: 17
+  simplify: false
+  dynamic_spatial: true
+  fixture_size: 640
+  outputs:
+  - predictions
+  split_detector: true

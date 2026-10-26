@@ -45,11 +45,10 @@ def run(*, adaround=False, device="cpu"):
         for i, f in enumerate(feeds()):
             yield EvaluationSample(str(i), f, 5)
 
-    ort = (
-        OrtConfig.cpu()
-        if device == "cpu"
-        else OrtConfig.cuda(int(device.split(":")[1]))
-    )
+    from .configuration import check_device
+
+    check_device(device, "--device")
+    ort = OrtConfig.cpu() if device == "cpu" else OrtConfig.cuda(int(device[5:]))
     stats = calibrate(model, feeds, ort=ort)
     records = []
     baseline = evaluate(
@@ -79,14 +78,10 @@ def run(*, adaround=False, device="cpu"):
                 expected_samples=8,
             )
             records.append(
-                dict(
-                    condition=family + "_" + rounding,
-                    metrics=result.metrics,
-                    internal_qdq_count=q.audit["internal_qdq_count"],
-                )
+                dict(condition=family + "_" + rounding, metrics=result.metrics)
             )
     return dict(
-        kind="synthetic API smoke, not pretrained accuracy",
+        kind="demo model execution check, not pretrained accuracy",
         fp32=baseline.metrics,
         results=records,
     )

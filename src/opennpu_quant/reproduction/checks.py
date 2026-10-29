@@ -16,16 +16,18 @@ def arrays(actual, expected, atol=1e-5, rtol=1e-4):
     integer = actual.dtype.kind in "biu"
     a, b = actual.reshape(-1), expected.reshape(-1)
     for start in range(0, n, 262144):
+        exact = a[start : start + 262144] != b[start : start + 262144]
         x = a[start : start + 262144].astype(np.float64)
         y = b[start : start + 262144].astype(np.float64)
         delta = np.abs(x - y)
         maximum = max(maximum, float(delta.max(initial=0)))
         total += float(delta.sum())
         squares += float(np.dot(delta, delta))
+        # Integers above 2**53 can collide in float64, so count them exactly.
         outside += int(
-            np.count_nonzero(delta > (0 if integer else atol + rtol * np.abs(y)))
+            np.count_nonzero(exact if integer else delta > atol + rtol * np.abs(y))
         )
-        differing += int(np.count_nonzero(x != y))
+        differing += int(np.count_nonzero(exact))
         dot += float(np.dot(x, y))
         aa += float(np.dot(x, x))
         bb += float(np.dot(y, y))

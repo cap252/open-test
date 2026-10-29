@@ -30,6 +30,13 @@ class ReproductionCheckTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 tool.arrays(value, np.ones(5, np.float32))
 
+    def test_large_integer_differences_are_not_lost(self):
+        out = tool.arrays(np.array([2**53 + 1], np.int64), np.array([2**53], np.int64))
+        self.assertFalse(out["bitwise_equal"])
+        self.assertEqual(1, out["differing_elements"])
+        self.assertEqual(1, out["outside_tolerance"])
+        self.assertFalse(out["numeric_passed"])
+
     def test_prediction_order_is_distinct_from_set(self):
         a = [
             dict(category_id=1, bbox=[0, 0, 1, 1], score=0.8),

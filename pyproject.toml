@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opennpu-quant"
-version = "0.1.0"
+version = "1.0.0"
 description = "Portable ONNX QDQ, power-of-two scales and fixed-encoding AdaRound"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"

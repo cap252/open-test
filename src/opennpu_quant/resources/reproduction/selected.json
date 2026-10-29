@@ -102918,7 +102918,7 @@
           "url": "http://download.tensorflow.org/models/deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz",
           "sha256": "cd506941e4f88fd053903913761df2e76ea00c01079cecfd35855304a4a5fb48",
           "license": "Apache-2.0",
-          "note": "일반 DeepLabV3. ASPP의 dilation 갈래와 decoder가 없다 (1x1 conv + image pooling 2갈래)"
+          "note": "Plain DeepLabV3 without atrous ASPP branches or a decoder; two branches use 1x1 convolution and image pooling."
         },
         "export": {
           "family": "tf_deeplab",
@@ -103067,7 +103067,7 @@
           "url": "http://download.tensorflow.org/models/deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz",
           "sha256": "cd506941e4f88fd053903913761df2e76ea00c01079cecfd35855304a4a5fb48",
           "license": "Apache-2.0",
-          "note": "일반 DeepLabV3. ASPP의 dilation 갈래와 decoder가 없다 (1x1 conv + image pooling 2갈래)"
+          "note": "Plain DeepLabV3 without atrous ASPP branches or a decoder; two branches use 1x1 convolution and image pooling."
         },
         "export": {
           "family": "tf_deeplab",
@@ -103234,7 +103234,7 @@
           "url": "http://download.tensorflow.org/models/deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz",
           "sha256": "cd506941e4f88fd053903913761df2e76ea00c01079cecfd35855304a4a5fb48",
           "license": "Apache-2.0",
-          "note": "일반 DeepLabV3. ASPP의 dilation 갈래와 decoder가 없다 (1x1 conv + image pooling 2갈래)"
+          "note": "Plain DeepLabV3 without atrous ASPP branches or a decoder; two branches use 1x1 convolution and image pooling."
         },
         "export": {
           "family": "tf_deeplab",
@@ -103386,7 +103386,7 @@
           "url": "http://download.tensorflow.org/models/deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz",
           "sha256": "cd506941e4f88fd053903913761df2e76ea00c01079cecfd35855304a4a5fb48",
           "license": "Apache-2.0",
-          "note": "일반 DeepLabV3. ASPP의 dilation 갈래와 decoder가 없다 (1x1 conv + image pooling 2갈래)"
+          "note": "Plain DeepLabV3 without atrous ASPP branches or a decoder; two branches use 1x1 convolution and image pooling."
         },
         "export": {
           "family": "tf_deeplab",
@@ -103553,7 +103553,7 @@
           "url": "http://download.tensorflow.org/models/deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz",
           "sha256": "cd506941e4f88fd053903913761df2e76ea00c01079cecfd35855304a4a5fb48",
           "license": "Apache-2.0",
-          "note": "일반 DeepLabV3. ASPP의 dilation 갈래와 decoder가 없다 (1x1 conv + image pooling 2갈래)"
+          "note": "Plain DeepLabV3 without atrous ASPP branches or a decoder; two branches use 1x1 convolution and image pooling."
         },
         "export": {
           "family": "tf_deeplab",
@@ -103705,7 +103705,7 @@
           "url": "http://download.tensorflow.org/models/deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz",
           "sha256": "cd506941e4f88fd053903913761df2e76ea00c01079cecfd35855304a4a5fb48",
           "license": "Apache-2.0",
-          "note": "일반 DeepLabV3. ASPP의 dilation 갈래와 decoder가 없다 (1x1 conv + image pooling 2갈래)"
+          "note": "Plain DeepLabV3 without atrous ASPP branches or a decoder; two branches use 1x1 convolution and image pooling."
         },
         "export": {
           "family": "tf_deeplab",
@@ -103872,7 +103872,7 @@
           "url": "http://download.tensorflow.org/models/deeplabv3_mnv2_pascal_train_aug_2018_01_29.tar.gz",
           "sha256": "cd506941e4f88fd053903913761df2e76ea00c01079cecfd35855304a4a5fb48",
           "license": "Apache-2.0",
-          "note": "일반 DeepLabV3. ASPP의 dilation 갈래와 decoder가 없다 (1x1 conv + image pooling 2갈래)"
+          "note": "Plain DeepLabV3 without atrous ASPP branches or a decoder; two branches use 1x1 convolution and image pooling."
         },
         "export": {
           "family": "tf_deeplab",

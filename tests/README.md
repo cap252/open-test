@@ -111,6 +111,6 @@ The fixed-angle math check uses [20 high-precision reference cases](fixtures/fac
 | `test_repeat_outputs.py` | Replay repeats through `run_tensors`: requested output order, independent copies of pass-through outputs, missing inputs and compact resume |
 | `test_reproduction_checks.py` | Raw tensor tolerances, prediction ordering and artifact tampering |
 | `test_calibration_reproduction.py` | Bitwise statistics comparisons (including signed zero and one-ULP differences), histogram count drift, missing or non-finite tensors, and direct comparison against QDQ initializers on a demo model. The original-asset maintenance tool is described in [tools/README.md](../tools/README.md) |
-| `test_replay_diagnostics.py` | Verified failed replay measurements remain visible in diagnostic exports without entering accuracy/recovery; tampering, portable roundtrips, and CSV example consistency |
+| `test_replay_diagnostics.py` | Verified failed replay measurements remain visible in diagnostic exports without entering accuracy/recovery. Tampering, portable roundtrips, and CSV example consistency are also covered |
 | `test_reference_metric_migration.py` | Maintainer conversion of reference records to the current metric names: bit-preserving values, hashes, tampering and conflicts, binding collisions, and new packages that run, report, resume and relocate |
 | `test_preset_generation.py` | Standalone preset generation, read-only drift detection, independent configs, policy conversion equivalence and the runtime/tool import boundary |

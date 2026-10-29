@@ -109,7 +109,7 @@ LFW smoke manifests and partial results are not accepted for execution, reportin
 opennpu-quant export resnet18
 ```
 
-Export verifies the recipe's pinned checkpoint and source, then creates the ONNX bundle. `strict` (default) and `functional` are compatibility choices with the same checks. Both report finite framework-to-ONNX differences in the console and `model.json` without rejecting export. Shape, dtype, non-finite output, graph conversion, partition and Release contract errors still stop export.
+Export verifies the recipe's pinned checkpoint and source, then creates the ONNX bundle. `strict` (default) and `functional` are compatibility choices with the same checks. Both report finite framework-to-ONNX differences in the console and `model.json` without rejecting export. Shape, dtype, non-finite output, graph conversion, partition and release contract errors still stop export.
 
 Export checks use CPU fixtures and do not establish GPU execution or full-dataset accuracy. For GPU evaluation, run the exported network with `--device cuda:0`. Host graphs remain on CPU.
 
@@ -126,7 +126,7 @@ You need these environments only to export models.
 | The three MMSeg models | A separate interpreter. Follow the Torch 2.1.0 and compiled MMCV 2.1.0 installation order in [cnn38-mmseg.txt](../requirements/cnn38-mmseg.txt) |
 | TF SSD and DeepLab | The TensorFlow/tf2onnx packages in the setup environment, or a separate interpreter selected with `--python` if they conflict |
 
-The `cnn38` filenames and optional dependency group refer to the complete 38-model catalog. They do not select a run preset; use `-c cnn30` to select the 30-model experiment. The existing installation names remain supported.
+The `cnn38` filenames and optional dependency group refer to the complete 38-model catalog. They do not select a run preset. Use `-c cnn30` to select the 30-model experiment. The existing installation names remain supported.
 
 The setup environment does not require or install pip. From the repository root, select the same uv executable that setup uses and specify the destination interpreter explicitly. If uv was downloaded by setup, it is at `.tools/uv` and may not be on `PATH`.
 

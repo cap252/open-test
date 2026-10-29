@@ -72,8 +72,8 @@ The two commands answer different questions. `run` measures the accuracy of mode
 A model bundle groups the files and connections needed to run a model:
 
 - `network.onnx`, which performs the prediction computation.
-- optional `preprocess.onnx` and `postprocess.onnx` files for processing around the network.
-- information connecting the inputs and outputs of those graphs.
+- Optional `preprocess.onnx` and `postprocess.onnx` files for processing around the network.
+- Information connecting the inputs and outputs of those graphs.
 
 Not every model needs the optional graphs. Additional Python postprocessing and metric calculation belong to the evaluator. A model recipe describes the input format, preprocessing and how to interpret the outputs. Keeping this information with the network matters because changing preprocessing or output interpretation can change accuracy even when the network file stays the same. File layouts are in [Model bundles and recipes](models-and-data.md#model-bundles-and-recipes).
 

@@ -16,7 +16,7 @@ Create a local JSON bindings file for the original assets. The plan uses these r
 | `research-runs` | Original experiment output trees at their recorded relative paths |
 | `final-data-manifests` | The selected LFW calibration data manifest |
 
-The tool also reads the packaged selection, so include every additional binding needed by the chosen model's dataset and graphs. Root values must identify the actual local assets; adding a placeholder path does not provide the original files. Keep relative paths and recorded SHA256 values intact. Obtain the original data from its maintainer before using this check.
+The tool also reads the packaged selection, so include every additional binding needed by the chosen model's dataset and graphs. Root values must identify the actual local assets. Adding a placeholder path does not provide the original files. Keep relative paths and recorded SHA256 values intact. Obtain the original data from its maintainer before using this check.
 
 From a source checkout with the required GPU environment and assets:
 
